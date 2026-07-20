@@ -81,6 +81,19 @@ export function applyAssetPack(atlas, imgs) {
 		tc.drawImage(img, sx, sy, sw, sh, -dw / 2, -dh / 2, dw, dh)
 		tc.setTransform(1, 0, 0, 1, 0, 0)
 		tc.filter = 'none'
+		if (opts.legLift) {
+			// synthesized walk frame: lift one half of the feet rows by 1px.
+			// Alternating halves across two frames reads as a stepping gait —
+			// the 16px packs ship idle frames only.
+			const half = Math.floor(outW / 2)
+			const bandH = 3
+			const y0 = outH - bandH
+			const x0 = opts.legLift === 'L' ? 0 : half
+			const bw = opts.legLift === 'L' ? half : outW - half
+			const band = tc.getImageData(x0, y0, bw, bandH)
+			tc.clearRect(x0, y0, bw, bandH)
+			tc.putImageData(band, x0, y0 - 1)
+		}
 		if (opts.clearCorners) {
 			// the character sheet has tiny selection ticks baked into cell
 			// corners — scrub a 3px square at each corner
@@ -127,18 +140,33 @@ export function applyAssetPack(atlas, imgs) {
 			put(i === 0 ? name : `${name}#${i}`, img, 0, 0, img.width, img.height, opts)
 		)
 		atlas.anims[name] = frames
+		if (opts.walk) {
+			const a = frameImgs[0]
+			const b = frameImgs[Math.min(2, frameImgs.length - 1)]
+			atlas.anims[`${name}_walk`] = [
+				put(`${name}_walk`, a, 0, 0, a.width, a.height, { ...opts, legLift: 'L' }),
+				put(`${name}_walk#1`, b, 0, 0, b.width, b.height, { ...opts, legLift: 'R' }),
+			]
+		}
 	}
 
 	/** Tileset helper: grid coords -> pixels. */
 	const tile = (name, col, row, opts = {}, w = 1, h = 1) =>
 		put(name, imgs.tileset, col * T, row * T, w * T, h * T, opts)
 
-	/** Character sheet helper: two frames (rows r and r+2 hold frame A/B). */
+	/**
+	 * Character sheet helper: two idle frames (rows r and r+2 hold frame A/B)
+	 * plus a synthesized `<name>_walk` cycle (alternating leg lifts).
+	 */
 	const char = (name, col, row, opts = {}) => {
 		const o = { clearCorners: true, ...opts }
 		const a = put(name, imgs.characters, col * T, row * T, T, T, o)
 		const b = put(`${name}#1`, imgs.characters, col * T, (row + 2) * T, T, T, o)
 		atlas.anims[name] = [a, b]
+		atlas.anims[`${name}_walk`] = [
+			put(`${name}_walk`, imgs.characters, col * T, row * T, T, T, { ...o, legLift: 'L' }),
+			put(`${name}_walk#1`, imgs.characters, col * T, (row + 2) * T, T, T, { ...o, legLift: 'R' }),
+		]
 	}
 
 	const seq = (base, n) => Array.from({ length: n }, (_, i) => imgs[`${base}_${i + 1}`])
@@ -186,15 +214,15 @@ export function applyAssetPack(atlas, imgs) {
 	char('hero_rogue', 3, 0, { tint: '#9fd6a4' })
 	char('hero_ranger', 4, 0, { tint: '#c8e69a' })
 	char('hero_mage', 1, 0, { tint: '#a8c4ff' })
-	putFrames('hero_cleric', seq('priest1', 4), { tint: '#ffe9b0' })
+	putFrames('hero_cleric', seq('priest1', 4), { tint: '#ffe9b0', walk: true })
 
 	// ---- enemies ----------------------------------------------------------------------
 	char('slime', 1, 1, { hue: -120 }) // blue imp -> green
 	char('slime_red', 1, 1, { hue: 120 }) // blue imp -> red
 	char('skeleton', 5, 0)
 	char('goblin_archer', 4, 1, { hue: 60 }) // orange skeleton -> green
-	putFrames('cultist', seq('priest3', 4), { tint: '#e08080' })
-	putFrames('assassin', seq('vampire', 4), { tint: '#9a90b8' })
+	putFrames('cultist', seq('priest3', 4), { tint: '#e08080', walk: true })
+	putFrames('assassin', seq('vampire', 4), { tint: '#9a90b8', walk: true })
 	char('brute', 6, 1, { scale: 1.3 })
 	char('brute_frost', 6, 1, { scale: 1.3, tint: '#a8d8ff' })
 	char('necromancer', 0, 0, { tint: '#c9a8e8' })
@@ -205,11 +233,17 @@ export function applyAssetPack(atlas, imgs) {
 	char('wisp', 0, 1)
 
 	// ---- bosses: large animated monsters from the Enemy Animations Set ---------------
-	putStrip('boss_tyrant', imgs.boss_skeleton1, 32, 32, 6, { tint: '#ffe08a' })
-	putStrip('boss_spider', imgs.boss_vampire, 32, 32, 6, { tint: '#b4e8a0', scale: 1.1 })
-	putStrip('boss_golem', imgs.boss_skeleton2, 32, 32, 6, { tint: '#ff9a70', scale: 1.15 })
-	putStrip('boss_lich', imgs.boss_vampire, 32, 32, 6, { tint: '#9cd4ff' })
-	putStrip('boss_void', imgs.boss_skeleton1, 32, 32, 6, { tint: '#b48aff', bright: 0.9, scale: 1.2 })
+	// idle + real walk/attack strips, tinted per boss
+	const boss = (name, base, opts) => {
+		putStrip(name, imgs[base], 32, 32, imgs[base].width / 32, opts)
+		putStrip(`${name}_walk`, imgs[`${base}_walk`], 32, 32, imgs[`${base}_walk`].width / 32, opts)
+		putStrip(`${name}_attack`, imgs[`${base}_attack`], 32, 32, imgs[`${base}_attack`].width / 32, opts)
+	}
+	boss('boss_tyrant', 'boss_skeleton1', { tint: '#ffe08a' })
+	boss('boss_spider', 'boss_vampire', { tint: '#b4e8a0', scale: 1.1 })
+	boss('boss_golem', 'boss_skeleton2', { tint: '#ff9a70', scale: 1.15 })
+	boss('boss_lich', 'boss_vampire', { tint: '#9cd4ff' })
+	boss('boss_void', 'boss_skeleton1', { tint: '#b48aff', bright: 0.9, scale: 1.2 })
 
 	// ---- UI font ---------------------------------------------------------------
 	// Bold Pixels' native grid is 16px (at 8px its 1px counters collapse and

@@ -859,7 +859,14 @@ export class Game {
 		}
 
 		const tint = p.flash > 0 ? rgba(255, 90, 90, 255) : 0xffffffff
-		r.animSprite(p.classDef.sprite, p.animT, p.x + ox, p.y - 3 + bob + oy, tint, rot, p.facingX < 0, scale, p.moving ? 7 : 4)
+		// use the walk-cycle frames while moving (falls back to idle frames)
+		let spriteName = p.classDef.sprite
+		let animT = p.animT
+		if (p.moving && this.atlas.anims[`${spriteName}_walk`]) {
+			spriteName += '_walk'
+			animT = p.walkT
+		}
+		r.animSprite(spriteName, animT, p.x + ox, p.y - 3 + bob + oy, tint, rot, p.facingX < 0, scale, p.moving ? 9 : 4)
 		// shield bubble
 		if (p.shieldHp > 0) {
 			r.circleOutline(p.x, p.y - 2, 11 + Math.sin(this.ui.menuT * 6), withAlpha(rgba(220, 210, 160, 255), 0.6))
@@ -890,7 +897,18 @@ export class Game {
 		if (e.flash > 0) tint = rgba(255, 80, 80, 255)
 		else if (e.team === 'player') tint = rgba(140, 220, 255, 255)
 
-		r.animSprite(sprite, e.animT, e.x + lean, e.y - e.r * 0.5 + bob, tint, rot, e.facing < 0, scale, e.kind === 'boss' ? 7 : 5)
+		// state-based animation: attack strip (bosses), walk cycle, or idle
+		const anims = this.atlas.anims
+		let name = sprite
+		let fps = e.kind === 'boss' ? 7 : 5
+		if (e.kind === 'boss' && e.attackPoseT > 0 && anims[`${sprite}_attack`]) {
+			name = `${sprite}_attack`
+			fps = 12
+		} else if ((e.kind === 'boss' ? e.movingT > 0 : isMoving) && anims[`${sprite}_walk`]) {
+			name = `${sprite}_walk`
+			fps = e.kind === 'boss' ? 10 : 8
+		}
+		r.animSprite(name, e.animT, e.x + lean, e.y - e.r * 0.5 + bob, tint, rot, e.facing < 0, scale, fps)
 
 		// mini health bar when damaged (bosses use the big UI bar)
 		if (e.kind !== 'boss' && e.hp < e.maxHp && e.team === 'enemy') {
