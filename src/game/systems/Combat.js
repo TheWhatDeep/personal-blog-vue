@@ -30,6 +30,7 @@ export class Combat {
 		if (player.attackCd > 0 || player.dead || player.rollTime > 0) return
 		const weapon = player.classDef.weapon
 		player.attackCd = player.attackCooldown
+		player.attackAnim = 0.18 // drives the lunge pose in the renderer
 
 		if (weapon.type === 'melee') {
 			// combo: consecutive swings ramp damage; the third hits harder

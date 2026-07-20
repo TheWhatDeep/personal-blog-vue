@@ -56,7 +56,7 @@ export class BossManager {
 		const boss = this.boss
 		if (boss.dead) return
 
-		boss.animT += dt * 6
+		boss.animT += dt // seconds clock
 		boss.flash = Math.max(0, boss.flash - dt)
 		boss.touchTimer = Math.max(0, boss.touchTimer - dt)
 

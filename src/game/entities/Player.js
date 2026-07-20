@@ -49,6 +49,8 @@ export class Player {
 		this.comboTimer = 0
 		this.flash = 0
 		this.animT = 0
+		this.walkT = 0
+		this.attackAnim = 0
 		this.moving = false
 		this.footstepT = 0
 		this.buffs = [] // {id, timeLeft, ...data}
@@ -250,9 +252,13 @@ export class Player {
 			this.vy = 0
 		}
 
+		// animT is a plain seconds clock — frame picking and bob math derive
+		// their own rates from it
+		this.animT += dt
+		this.attackAnim = Math.max(0, (this.attackAnim ?? 0) - dt)
 		this.moving = Math.abs(this.vx) + Math.abs(this.vy) > 1
 		if (this.moving) {
-			this.animT += dt * 10
+			this.walkT = (this.walkT ?? 0) + dt
 			this.footstepT -= dt
 			if (this.footstepT <= 0) {
 				this.footstepT = 0.32

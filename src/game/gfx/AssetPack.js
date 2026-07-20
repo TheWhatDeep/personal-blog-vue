@@ -17,10 +17,11 @@ const ASSET_URLS = import.meta.glob('../assets/*.png', {
 	query: '?url',
 	import: 'default',
 })
+import fontUrl from '../assets/BoldPixels.ttf'
 
 const T = 16 // pack tile size
 
-/** Load every pack image; resolves to {name -> HTMLImageElement}. */
+/** Load every pack image + the pixel font; resolves to {name -> Image}. */
 export async function loadAssetPack() {
 	const entries = Object.entries(ASSET_URLS).map(([path, url]) => {
 		const name = path.split('/').pop().replace('.png', '')
@@ -31,6 +32,15 @@ export async function loadAssetPack() {
 			img.src = url
 		})
 	})
+
+	// UI font ("Bold Pixels", itch.io). Non-fatal: text falls back to the
+	// baked monospace if the face fails to load.
+	const font = new FontFace('BoldPixels', `url(${fontUrl})`)
+	await font.load().then(
+		(f) => document.fonts.add(f),
+		(e) => console.warn('Pixel font failed to load:', e)
+	)
+
 	return Object.fromEntries(await Promise.all(entries))
 }
 
@@ -200,6 +210,14 @@ export function applyAssetPack(atlas, imgs) {
 	putStrip('boss_golem', imgs.boss_skeleton2, 32, 32, 6, { tint: '#ff9a70', scale: 1.15 })
 	putStrip('boss_lich', imgs.boss_vampire, 32, 32, 6, { tint: '#9cd4ff' })
 	putStrip('boss_void', imgs.boss_skeleton1, 32, 32, 6, { tint: '#b48aff', bright: 0.9, scale: 1.2 })
+
+	// ---- UI font ---------------------------------------------------------------
+	// Bold Pixels' native grid is 16px (at 8px its 1px counters collapse and
+	// letters merge into blobs). Measured at 16px: cap height 8, ascent 10,
+	// descent 2 — so it slots into the existing ~10px UI line height.
+	if (document.fonts.check('16px BoldPixels')) {
+		atlas.bakeFont('16px BoldPixels', 11, 10)
+	}
 
 	// Everything else (orbs, slash, hearts, skill icons, item icons, portal)
 	// keeps its procedural art — the pack has no equivalents.
