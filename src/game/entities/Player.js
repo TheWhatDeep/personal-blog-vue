@@ -245,6 +245,8 @@ export class Player {
 			this.vx = this.rollDirX * this.moveSpeed * 2.6
 			this.vy = this.rollDirY * this.moveSpeed * 2.6
 		} else if (!stunned) {
+			// attack commitment: swinging slows you down (dodge cancels it)
+			if (this.attackAnim > 0) speedMul *= 0.5
 			this.vx = input.moveX * this.moveSpeed * speedMul
 			this.vy = input.moveY * this.moveSpeed * speedMul
 		} else {
@@ -266,7 +268,7 @@ export class Player {
 			}
 		}
 
-		if (input.moveX !== 0 || input.moveY !== 0 || input.hasAimStick) {
+		if (input.moveX !== 0 || input.moveY !== 0 || input.hasAimStick || input.mouseAiming) {
 			this.facingX = input.aimX
 			this.facingY = input.aimY
 		}
@@ -299,6 +301,9 @@ export class Player {
 		this.rollTime = 0.26
 		this.dodgeCd = 0.85
 		this.iframes = Math.max(this.iframes, 0.32)
+		// dodge cancels attack recovery — the swing-swing-roll rhythm
+		this.attackAnim = 0
+		this.attackCd = Math.min(this.attackCd, 0.12)
 		game.audio.play('dash')
 		game.particles.burst({ x: this.x, y: this.y, count: 6, color: 0xffcccccc, speed: 30, life: 0.3 })
 	}

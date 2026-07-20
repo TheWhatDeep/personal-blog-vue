@@ -47,7 +47,23 @@ export class Combat {
 
 			const crit = this.rollCrit()
 			const dmg = Math.round(player.attackDamage * comboMul * (crit ? player.critMult : 1))
-			const angle = Math.atan2(player.facingY, player.facingX)
+			let angle = Math.atan2(player.facingY, player.facingX)
+
+			// melee magnetism: snap the swing toward the nearest target in a
+			// generous cone so near-misses connect
+			let magnet = null
+			let magnetD = Infinity
+			game.world.grid.query(player.x, player.y, weapon.range * 1.8, (e) => {
+				if (e.dead || e.team !== 'enemy') return
+				const d = dist(player.x, player.y, e.x, e.y)
+				if (d > weapon.range * 1.8 || d >= magnetD) return
+				const to = Math.atan2(e.y - player.y, e.x - player.x)
+				if (Math.abs(angleDiff(angle, to)) < 0.9) {
+					magnet = to
+					magnetD = d
+				}
+			})
+			if (magnet !== null) angle = magnet
 
 			game.audio.play('swing')
 			game.world.effects.push({
@@ -57,13 +73,18 @@ export class Combat {
 				rot: angle + Math.PI * 0.75, t: 0, dur: 0.12, scale: finisher ? 1.5 : 1.1,
 			})
 
-			this.meleeArc(player.x, player.y, angle, {
+			const hits = this.meleeArc(player.x, player.y, angle, {
 				range: weapon.range,
 				arc: weapon.arc,
 				damage: dmg,
 				crit,
 				knockback: weapon.knockback * (finisher ? 1.8 : 1),
 			})
+			// hit-stop: connecting swings freeze the world for a few frames,
+			// heavier on finishers and crits
+			if (hits > 0) {
+				game.hitStop = Math.max(game.hitStop, 0.03 + player.attackVariant * 0.012 + (crit ? 0.025 : 0))
+			}
 
 			// melee can smash cracked walls
 			const tx = Math.floor((player.x + player.facingX * weapon.range) / TILE_SIZE)
@@ -134,17 +155,43 @@ export class Combat {
 		e.flash = 0.1
 		if (e.team === 'enemy') e.aggro = true
 
+		// staggered bosses take bonus damage
+		if (e.kind === 'boss' && game.bossManager.staggeredT > 0) {
+			dmg = Math.round(dmg * 1.3)
+		}
+
 		// damage numbers: crits pop
 		const color = opts.isDot ? (opts.dotColor ?? 0xff4ad27a) : opts.crit ? 0xff3ad2ff : 0xffffffff
 		game.world.floatText(e.x, e.y - e.r - 4, String(dmg), color, opts.crit ? 1.4 : 1)
 
 		if (!opts.isDot) {
+			// impact particles spray along the hit direction
+			const hitAngle = (opts.kx || opts.ky) ? Math.atan2(opts.ky ?? 0, opts.kx ?? 0) : Math.random() * TAU
 			game.particles.burst({
-				x: e.x, y: e.y, count: opts.crit ? 10 : 5,
-				color: [0xff3434c0, 0xff4848e0], speed: 60, life: 0.35,
+				x: e.x, y: e.y, count: opts.crit ? 12 : 6,
+				color: [0xff3434c0, 0xff4848e0], speed: 90, life: 0.35,
+				angle: hitAngle, spread: 1.3,
 			})
 			if (opts.crit) game.audio.play('crit')
 			else game.audio.play('hit', 0.8)
+
+			// poise: enough damage interrupts what the enemy was doing
+			if (e.team === 'enemy') {
+				if (e.kind === 'boss') {
+					game.bossManager.addStagger(dmg)
+				} else {
+					e.staggerMeter = (e.staggerMeter ?? 0) + dmg
+					const poise = e.def.poise ?? 12
+					if (e.staggerMeter >= poise && e.state !== 'flinch') {
+						e.staggerMeter = 0
+						e.state = 'flinch'
+						e.stateTime = 0
+						e.vx = 0
+						e.vy = 0
+						e.attackWindup = 0
+					}
+				}
+			}
 		}
 
 		if (opts.status) game.statusFx.apply(e, opts.status)
@@ -225,7 +272,11 @@ export class Combat {
 		const game = this.game
 		const player = game.player
 		if (player.dead || game.godMode) return
-		if (!opts.isDot && (player.iframes > 0 || player.rollTime > 0)) return
+		if (!opts.isDot && (player.iframes > 0 || player.rollTime > 0)) {
+			// perfect dodge: the attack landed inside the roll's opening window
+			if (player.rollTime > 0.11 && !opts.isHazard) game.triggerPerfectDodge()
+			return
+		}
 
 		// shield buffs absorb first
 		let dmg = amount
@@ -258,6 +309,7 @@ export class Combat {
 
 		game.world.floatText(player.x, player.y - 10, String(dmg), 0xff4444ff, 1.1)
 		game.camera.shake(Math.min(0.45, 0.18 + dmg * 0.006))
+		game.hitStop = Math.max(game.hitStop, 0.045) // getting hit has weight too
 		game.audio.play('hurt')
 		game.events.emit('player:hurt', dmg)
 

@@ -12,7 +12,7 @@ export const BOSSES = {
 	tyrant: {
 		id: 'tyrant', name: 'The Grave Tyrant', sprite: 'boss_tyrant',
 		music: 'boss_tyrant', hp: 380, speed: 30, radius: 12, touchDamage: 14,
-		xp: 220, projectileSprite: 'orb_bone',
+		xp: 220, poise: 130, projectileSprite: 'orb_bone',
 		desc: 'Undead king of the Sunken Crypt.',
 		loot: { relicName: 'Crown of the Tyrant', gold: [60, 90] },
 		phases: [
@@ -49,7 +49,7 @@ export const BOSSES = {
 	broodmother: {
 		id: 'broodmother', name: 'Broodmother Vex', sprite: 'boss_spider',
 		music: 'boss_spider', hp: 700, speed: 55, radius: 13, touchDamage: 16,
-		xp: 420, projectileSprite: 'orb_poison',
+		xp: 420, poise: 190, projectileSprite: 'orb_poison',
 		desc: 'Venomous matriarch of the Caverns.',
 		loot: { relicName: 'Fang of the Brood', gold: [90, 130] },
 		phases: [
@@ -86,7 +86,7 @@ export const BOSSES = {
 	colossus: {
 		id: 'colossus', name: 'The Forge Colossus', sprite: 'boss_golem',
 		music: 'boss_golem', hp: 1150, speed: 24, radius: 14, touchDamage: 20,
-		xp: 650, projectileSprite: 'orb_fire',
+		xp: 650, poise: 300, projectileSprite: 'orb_fire',
 		desc: 'A furnace given hateful life.',
 		loot: { relicName: 'Molten Core', gold: [120, 180] },
 		phases: [
@@ -122,7 +122,7 @@ export const BOSSES = {
 	lich: {
 		id: 'lich', name: 'Maleth the Frost Lich', sprite: 'boss_lich',
 		music: 'boss_lich', hp: 1600, speed: 40, radius: 12, touchDamage: 18,
-		xp: 900, projectileSprite: 'orb_frost',
+		xp: 900, poise: 250, projectileSprite: 'orb_frost',
 		desc: 'Master of ice and stolen time.',
 		loot: { relicName: 'Heart of Winter', gold: [160, 240] },
 		phases: [
@@ -161,7 +161,7 @@ export const BOSSES = {
 	sovereign: {
 		id: 'sovereign', name: 'The Void Sovereign', sprite: 'boss_void',
 		music: 'boss_void', hp: 2300, speed: 48, radius: 14, touchDamage: 24,
-		xp: 1500, projectileSprite: 'orb_void',
+		xp: 1500, poise: 380, projectileSprite: 'orb_void',
 		desc: 'The abyss looks back.',
 		loot: { relicName: 'Eye of the Sovereign', gold: [250, 400] },
 		phases: [
