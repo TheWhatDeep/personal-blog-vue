@@ -50,8 +50,8 @@ export function generateArenaFloor(rng) {
 	carveRect(map, room.x, room.y, room.w, room.h)
 	buildWalls(map)
 
-	// pillars for cover + wall-slam play
-	for (const [px, py] of [[10, 10], [W - 13, 10], [10, H - 13], [W - 13, H - 13], [W >> 1, H >> 1]]) {
+	// pillars for cover + wall-slam play (kept away from the center spawn!)
+	for (const [px, py] of [[10, 10], [W - 13, 10], [10, H - 13], [W - 13, H - 13], [16, H >> 1], [W - 19, H >> 1]]) {
 		fillRect(map, px, py, 2, 2, TILE.WALL)
 	}
 	// hazard patches near the corners

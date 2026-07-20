@@ -232,6 +232,10 @@ export class Game {
 		const p = this.player
 		p.x = this.world.playerStart.x
 		p.y = this.world.playerStart.y
+		// never spawn inside a solid tile (editor maps, decorated spawn rooms)
+		const fixed = this.world.map.depenetrate(p.x, p.y, p.r)
+		p.x = fixed.x
+		p.y = fixed.y
 		p.kbx = p.kby = 0
 		p.summons = []
 		this.camera.snapTo(p.x, p.y)
