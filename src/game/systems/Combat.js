@@ -30,7 +30,10 @@ export class Combat {
 		if (player.attackCd > 0 || player.dead || player.rollTime > 0) return
 		const weapon = player.classDef.weapon
 		player.attackCd = player.attackCooldown
-		player.attackAnim = 0.18 // drives the lunge pose in the renderer
+		// attack animation plays once over most of the swing window
+		player.attackAnimDur = Math.min(0.35, player.attackCooldown * 0.9)
+		player.attackAnim = player.attackAnimDur
+		player.attackVariant = 1
 
 		if (weapon.type === 'melee') {
 			// combo: consecutive swings ramp damage; the third hits harder
@@ -38,7 +41,10 @@ export class Combat {
 			player.comboCount = Math.min(3, player.comboCount + 1)
 			const comboMul = 1 + 0.22 * (player.comboCount - 1)
 			const finisher = player.comboCount === 3
-			if (finisher) player.comboCount = 0
+			if (finisher) {
+				player.comboCount = 0
+				player.attackVariant = 2 // combo finisher uses the big swing strip
+			}
 
 			const crit = this.rollCrit()
 			const dmg = Math.round(player.attackDamage * comboMul * (crit ? player.critMult : 1))
@@ -164,6 +170,20 @@ export class Combat {
 		if (e.dead) return
 		const game = this.game
 		e.dead = true
+
+		// play the character's death animation as a fire-and-forget effect
+		const sprite = e.spriteOverride ?? (e.kind === 'boss' ? e.bossDef.sprite : e.def.sprite)
+		const death = game.atlas?.anims?.[`${sprite}_death`]
+		if (death) {
+			const fps = 10
+			game.world.effects.push({
+				type: 'anim', name: `${sprite}_death`,
+				x: e.x, y: e.y - e.r * 0.5,
+				t: 0, dur: death.length / fps + 0.25, fps,
+				flipX: e.facing < 0,
+				scale: e.kind === 'boss' ? 1 : e.scale,
+			})
+		}
 
 		game.particles.burst({
 			x: e.x, y: e.y, count: e.kind === 'boss' ? 40 : 14,

@@ -59,6 +59,8 @@ export class BossManager {
 		boss.animT += dt // seconds clock
 		boss.flash = Math.max(0, boss.flash - dt)
 		boss.touchTimer = Math.max(0, boss.touchTimer - dt)
+		boss.movingT = Math.max(0, (boss.movingT ?? 0) - dt)
+		boss.attackPoseT = Math.max(0, (boss.attackPoseT ?? 0) - dt)
 
 		if (this.introT > 0) {
 			this.introT -= dt
@@ -136,6 +138,8 @@ export class BossManager {
 			lifetime: Infinity,
 			aggro: true,
 			speedMul: 1,
+			movingT: 0,
+			attackPoseT: 0,
 		}
 		this.boss = boss
 		game.world.boss = boss
@@ -218,6 +222,7 @@ export class BossManager {
 
 	_moveBoss(vx, vy, dt) {
 		const boss = this.boss
+		if (Math.abs(vx) + Math.abs(vy) > 4) boss.movingT = 0.15 // drives walk anim
 		const map = this.game.world.map
 		const moved = map.moveCircle(boss.x, boss.y, boss.r, (vx + boss.kbx) * dt, (vy + boss.kby) * dt)
 		boss.x = moved.x
@@ -232,6 +237,11 @@ export class BossManager {
 		const world = game.world
 		const boss = this.boss
 		const player = game.player
+
+		// most attack moves play the boss' attack animation strip
+		if (!['chase', 'teleport', 'timeslow'].includes(move.type)) {
+			boss.attackPoseT = Math.max(boss.attackPoseT ?? 0, (move.telegraph ?? 0) + 0.8)
+		}
 
 		switch (move.type) {
 			case 'chase':
@@ -415,6 +425,11 @@ export class BossManager {
 		const world = game.world
 		const boss = this.boss
 		const player = game.player
+
+		// sustained attacks keep the attack animation playing
+		if (this.spiral || this.beams || this.charging) {
+			boss.attackPoseT = Math.max(boss.attackPoseT, 0.2)
+		}
 
 		if (this.spiral) {
 			const s = this.spiral
