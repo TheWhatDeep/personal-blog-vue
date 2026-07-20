@@ -5,6 +5,7 @@ import { RouterLink } from 'vue-router'
     <nav>
         <RouterLink to="/">Home</RouterLink>
         <RouterLink to="/me">Just Me</RouterLink>
+        <RouterLink to="/game">Play</RouterLink>
         <img src="/blog-logo.png" alt="logo">
     </nav>
 </template>
