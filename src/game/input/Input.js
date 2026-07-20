@@ -27,6 +27,7 @@ const KEY_BINDINGS = {
 	cancel: ['Escape', 'KeyK'],
 	fullscreen: ['KeyF'],
 	debug: ['Backquote', 'F9'],
+	test: ['KeyT'], // map editor: test play
 }
 
 // standard-mapping gamepad buttons
@@ -174,6 +175,58 @@ export class Input {
 	consumeAny() {
 		const v = this.anyPressed
 		this.anyPressed = false
+		return v
+	}
+
+	/**
+	 * Enable mouse tracking against a canvas (used by the map editor).
+	 * Exposes mouse position in virtual-pixel UI coordinates plus
+	 * pressed/down state for left (0) and right (2) buttons and wheel steps.
+	 */
+	attachMouse(canvas, renderer) {
+		this.mouseX = 0
+		this.mouseY = 0
+		this.mouseDown = [false, false, false]
+		this._mousePressed = [false, false, false]
+		this.wheel = 0
+
+		this._onMouseMove = (e) => {
+			const rect = canvas.getBoundingClientRect()
+			this.mouseX = (e.clientX - rect.left) / renderer.pixelScale
+			this.mouseY = (e.clientY - rect.top) / renderer.pixelScale
+		}
+		this._onMouseDown = (e) => {
+			this.mouseDown[e.button] = true
+			this._mousePressed[e.button] = true
+			this.anyPressed = true
+		}
+		this._onMouseUp = (e) => {
+			this.mouseDown[e.button] = false
+		}
+		this._onWheel = (e) => {
+			this.wheel += Math.sign(e.deltaY)
+			e.preventDefault()
+		}
+		this._onCtx = (e) => e.preventDefault()
+
+		canvas.addEventListener('mousemove', this._onMouseMove)
+		canvas.addEventListener('mousedown', this._onMouseDown)
+		window.addEventListener('mouseup', this._onMouseUp)
+		canvas.addEventListener('wheel', this._onWheel, { passive: false })
+		canvas.addEventListener('contextmenu', this._onCtx)
+	}
+
+	/** Edge-triggered mouse press; consumed once per read. */
+	mousePressed(button = 0) {
+		const v = this._mousePressed?.[button] ?? false
+		if (this._mousePressed) this._mousePressed[button] = false
+		return v
+	}
+
+	/** Wheel steps since last read (positive = down). */
+	takeWheel() {
+		const v = this.wheel || 0
+		this.wheel = 0
 		return v
 	}
 

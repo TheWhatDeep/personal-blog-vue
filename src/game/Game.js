@@ -25,6 +25,7 @@ import { BossManager } from './systems/BossManager.js'
 import { EndlessMode } from './systems/EndlessMode.js'
 import { SaveSystem } from './systems/SaveSystem.js'
 import { UI } from './ui/UI.js'
+import { MapEditor } from './editor/MapEditor.js'
 import { dist } from './core/MathUtil.js'
 
 /**
@@ -65,6 +66,8 @@ export class Game {
 		this.bossManager = new BossManager(this)
 		this.endless = new EndlessMode(this)
 		this.ui = new UI(this)
+		this.editor = new MapEditor(this)
+		this.input.attachMouse(canvas, this.renderer)
 
 		this.state = 'menu'
 		this.prevState = 'menu'
@@ -152,10 +155,43 @@ export class Game {
 
 		if (mode === 'endless') {
 			this._loadEndlessArena()
+		} else if (mode === 'custom') {
+			const dungeon = this.editor.buildDungeon()
+			if (!dungeon) {
+				this.state = 'editor'
+				return
+			}
+			this.world = new World(this, dungeon)
+			this._placePlayer()
+			this.audio.setTrack(dungeon.biome.music)
+			this.ui.toast('Testing your map — stairs or death return to the editor')
 		} else {
 			this.loadFloor(1)
 		}
 		this.state = 'playing'
+	}
+
+	/** Leave a custom-map test and return to the editor. */
+	exitCustomTest(msg) {
+		this.mode = 'story'
+		this.runActive = false
+		this.player = null
+		this.world = null
+		this.bossManager.reset()
+		this.state = 'editor'
+		this.audio.setTrack('menu')
+		if (msg) this.editor.toast(msg)
+	}
+
+	openEditor() {
+		this.state = 'editor'
+		this.audio.setTrack('menu')
+		this.camera.snapTo(this.editor.camX, this.editor.camY)
+	}
+
+	exitEditor() {
+		this.state = 'menu'
+		this.ui.sel = 0
 	}
 
 	/** Continue the current character into endless mode (post-victory). */
@@ -254,6 +290,7 @@ export class Game {
 			case 'dead': this.updateDeath(); break
 			case 'victory': this.updateVictory(); break
 			case 'debug': this.updateDebug(); break
+			case 'editor': this.editor.update(dt); break
 		}
 
 		this.input.consumeAny()
@@ -302,6 +339,8 @@ export class Game {
 
 			this._updateInteraction()
 			if (input.pressed('interact') && this.interactTarget) this._doInteract()
+			// interacting can end the run (custom-map exit, victory portal)
+			if (this.state !== 'playing' || !this.world) return
 		}
 
 		this.ai.update(dt)
@@ -313,12 +352,15 @@ export class Game {
 
 		this.camera.follow(player.x, player.y, dt)
 
-		// death → summary screen after a beat
+		// death → summary screen after a beat (custom tests return to the editor)
 		if (player.dead && this.deathTimer > 0) {
 			this.deathTimer -= dt
 			if (this.deathTimer <= 0) {
-				this.state = 'dead'
-				this.ui.sel = 0
+				if (this.mode === 'custom') this.exitCustomTest('You died — tweak the map and try again!')
+				else {
+					this.state = 'dead'
+					this.ui.sel = 0
+				}
 			}
 		}
 	}
@@ -364,7 +406,8 @@ export class Game {
 		const t = this.interactTarget
 		switch (t.kind) {
 			case 'stairs':
-				this.nextFloor()
+				if (this.mode === 'custom') this.exitCustomTest('Map complete! Nice work.')
+				else this.nextFloor()
 				break
 			case 'chest':
 				if (!t.locked) this.loot.openChest(t)
@@ -412,7 +455,7 @@ export class Game {
 
 	updateMenu() {
 		const input = this.input
-		this._menuNav(4)
+		this._menuNav(5)
 		if (input.pressed('confirm')) {
 			this.audio.play('ui_select')
 			switch (this.ui.sel) {
@@ -431,9 +474,12 @@ export class Game {
 					}
 					break
 				case 2:
-					this.state = 'stats'
+					this.openEditor()
 					break
 				case 3:
+					this.state = 'stats'
+					break
+				case 4:
 					this.state = 'settings'
 					this.prevState = 'menu'
 					this.ui.sel = 0
@@ -454,7 +500,7 @@ export class Game {
 			this.audio.play('ui_move')
 		}
 		if (input.pressed('cancel')) {
-			this.state = 'menu'
+			this.state = this.pendingMode === 'custom' ? 'editor' : 'menu'
 			this.ui.sel = 0
 			this.audio.play('ui_back')
 			return
@@ -484,7 +530,10 @@ export class Game {
 				case 0: this.state = 'playing'; break
 				case 1: this.state = 'inventory'; this.ui.sel = 0; this.ui.tab = 0; break
 				case 2: this.state = 'settings'; this.prevState = 'paused'; this.ui.sel = 0; break
-				case 3: this.endRun('menu'); break
+				case 3:
+					if (this.mode === 'custom') this.exitCustomTest()
+					else this.endRun('menu')
+					break
 			}
 		}
 	}
@@ -761,6 +810,12 @@ export class Game {
 			this.camera.prepare()
 			r.beginWorld(this.camera)
 			this.renderWorld(r)
+			r.flush()
+		} else if (this.state === 'editor') {
+			r.clear(0.05, 0.04, 0.08)
+			this.camera.prepare()
+			r.beginWorld(this.camera)
+			this.editor.renderWorld(r)
 			r.flush()
 		} else {
 			r.clear(0.04, 0.03, 0.07)

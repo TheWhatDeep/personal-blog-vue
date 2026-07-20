@@ -85,6 +85,7 @@ export class UI {
 			case 'debug': this.drawHUD(r); this.drawDebug(r); break
 			case 'dead': this.drawDeath(r); break
 			case 'victory': this.drawVictory(r); break
+			case 'editor': this.game.editor.drawUI(r); break
 		}
 
 		this.drawToasts(r)
@@ -335,6 +336,7 @@ export class UI {
 		const items = [
 			{ label: 'New Run', enabled: true },
 			{ label: endlessUnlocked ? 'Endless Mode' : 'Endless Mode (defeat the Void Sovereign)', enabled: endlessUnlocked },
+			{ label: 'Map Editor', enabled: true },
 			{ label: 'Records & Achievements', enabled: true },
 			{ label: 'Settings', enabled: true },
 		]
@@ -411,7 +413,7 @@ export class UI {
 			{ label: 'Resume', enabled: true },
 			{ label: 'Character & Items', enabled: true },
 			{ label: 'Settings', enabled: true },
-			{ label: 'Abandon Run', enabled: true },
+			{ label: this.game.mode === 'custom' ? 'Back to Editor' : 'Abandon Run', enabled: true },
 		]
 		this.drawMenuList(r, items, cx, cy - 28, this.sel)
 	}
