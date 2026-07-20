@@ -12,6 +12,8 @@ import { Player } from './entities/Player.js'
 import { World } from './world/World.js'
 import { generateDungeon, generateArenaFloor } from './world/DungeonGenerator.js'
 import { TILE, TILE_SIZE } from './world/TileMap.js'
+import { buildVisualLUT, pieceInfo, CLS, CLS_NAMES, FLAG_FALLBACK, FLAG_ERROR } from './world/TileVisuals.js'
+import { buildConformanceMap } from './world/ConformanceMap.js'
 import { BIOMES, biomeForFloor, FINAL_FLOOR } from './data/biomes.js'
 import { CLASSES, CLASS_LIST } from './data/classes.js'
 import { SKILLS } from './data/skills.js'
@@ -197,6 +199,20 @@ export class Game {
 		this.ui.sel = 0
 	}
 
+	/**
+	 * Dev-only: load the deterministic wall-grammar conformance map. Renders
+	 * clean (no HUD/toasts/minimap) so wall selection can be inspected.
+	 */
+	loadConformanceMap() {
+		if (!this.player) this.player = new Player(CLASSES.warrior)
+		this.mode = 'story'
+		this.runActive = true
+		this.bossManager.reset()
+		this.world = new World(this, buildConformanceMap())
+		this._placePlayer()
+		this.state = 'playing'
+	}
+
 	/** Continue the current character into endless mode (post-victory). */
 	continueToEndless() {
 		this.mode = 'endless'
@@ -297,6 +313,7 @@ export class Game {
 			case 'dead': this.updateDeath(); break
 			case 'victory': this.updateVictory(); break
 			case 'debug': this.updateDebug(); break
+			case 'assetPreview': this.updateAssetPreview(); break
 			case 'editor': this.editor.update(dt); break
 		}
 
@@ -423,6 +440,18 @@ export class Game {
 				best.kind === 'shrine' ? 'Pray at the shrine' :
 				best.kind === 'shop' ? 'Browse wares' :
 				best.kind === 'portal' ? 'Enter the portal' : null
+			return
+		}
+
+		// locked gate hint (opening itself is proximity-based, needs a key)
+		for (const gate of world.gates) {
+			if (gate.opened) continue
+			for (const [tx, ty] of gate.tiles) {
+				if (dist(player.x, player.y, tx * TILE_SIZE + 8, ty * TILE_SIZE + 8) < 30) {
+					this.interactPrompt = 'Locked — find the gate key'
+					return
+				}
+			}
 		}
 	}
 
@@ -726,6 +755,9 @@ export class Game {
 		return [
 			{ label: `God Mode: ${this.godMode ? 'ON' : 'OFF'}`, fn: () => { this.godMode = !this.godMode } },
 			{ label: `Perf Overlay: ${this.showPerf ? 'ON' : 'OFF'}`, fn: () => { this.showPerf = !this.showPerf } },
+			{ label: 'Asset Preview (v5.2)', fn: () => { this.state = 'assetPreview'; this.ui.previewPage = 0 } },
+			{ label: 'Wall Test Map', fn: () => this.loadConformanceMap() },
+			{ label: `Wall Debug Overlay: ${this.debugWalls ? 'ON' : 'OFF'}`, fn: () => { this.debugWalls = !this.debugWalls } },
 			{ label: '+1,000 Gold', fn: () => { p.gold += 1000; give('+1000g') } },
 			{ label: '+5 Attribute Points', fn: () => { p.attrPoints += 5; give('+5 attribute points') } },
 			{ label: '+5 Skill Points', fn: () => { p.skillPoints += 5; give('+5 skill points') } },
@@ -826,6 +858,19 @@ export class Game {
 		}
 	}
 
+	/** Dev asset inspector: pages through the v5.2 sheets and animations. */
+	updateAssetPreview() {
+		const input = this.input
+		if (input.pressed('cancel') || input.pressed('debug') || input.pressed('pause')) {
+			this.state = this.runActive ? 'debug' : 'menu'
+			this.audio.play('ui_back')
+			return
+		}
+		const pages = 5
+		if (input.pressed('right')) this.ui.previewPage = ((this.ui.previewPage ?? 0) + 1) % pages
+		if (input.pressed('left')) this.ui.previewPage = ((this.ui.previewPage ?? 0) + pages - 1) % pages
+	}
+
 	toggleFullscreen() {
 		const el = this.canvas.parentElement || this.canvas
 		if (document.fullscreenElement) {
@@ -880,43 +925,107 @@ export class Game {
 		const wallR = atlas.regions[`wall_${biome.id}`]
 		const hazardR = atlas.regions[`hazard_${biome.id}`]
 
+		// connected-wall LUT (v5.2 pack); null until the pack loads → fallback art
+		if (this._visLUTBiome !== biome.id || (!this._visLUT && atlas.regions.v5t_0_0)) {
+			this._visLUT = buildVisualLUT(atlas, biome.id)
+			this._visLUTBiome = biome.id
+		}
+		const lut = map.vis0 ? this._visLUT : null
+
 		for (let ty = ty0; ty <= ty1; ty++) {
 			for (let tx = tx0; tx <= tx1; tx++) {
 				const t = map.get(tx, ty)
-				if (t === TILE.VOID) continue
 				const x = tx * TILE_SIZE
 				const y = ty * TILE_SIZE
+				const i = ty * map.w + tx
+
+				if (lut) {
+					// resolved base + overlay piece (collision-derived, precomputed)
+					const p0 = map.vis0[i]
+					const p1 = map.vis1[i]
+					if (p0) r.draw(lut[p0 - 1], x, y, TILE_SIZE, TILE_SIZE)
+					if (p1) r.draw(lut[p1 - 1], x, y, TILE_SIZE, TILE_SIZE)
+					if (t === TILE.VOID || t === TILE.WALL) continue
+				} else if (t === TILE.VOID) {
+					continue
+				}
+
 				switch (t) {
 					case TILE.FLOOR:
-						r.draw(floorR[map.variants[ty * map.w + tx]], x, y, TILE_SIZE, TILE_SIZE)
+						if (!lut) r.draw(floorR[map.variants[i]], x, y, TILE_SIZE, TILE_SIZE)
 						break
 					case TILE.WALL:
 						r.draw(wallR, x, y, TILE_SIZE, TILE_SIZE)
 						break
+					case TILE.GATE:
+						break // drawn by its gate prop (animated portcullis)
 					case TILE.CRACK:
-						r.draw(wallR, x, y, TILE_SIZE, TILE_SIZE, rgba(200, 190, 230, 255))
+						if (!lut) r.draw(wallR, x, y, TILE_SIZE, TILE_SIZE, rgba(200, 190, 230, 255))
 						r.rect(x + 5, y + 3, 1, 9, rgba(20, 18, 28, 255))
 						r.rect(x + 9, y + 6, 1, 7, rgba(20, 18, 28, 255))
 						break
 					case TILE.STAIRS:
-						r.draw(floorR[0], x, y, TILE_SIZE, TILE_SIZE)
+						if (!lut) r.draw(floorR[0], x, y, TILE_SIZE, TILE_SIZE)
 						r.sprite('stairs', x + 8, y + 8)
 						break
 					case TILE.HAZARD: {
+						const peakFrames = atlas.anims.v5_peaks
+						if (biome.hazardType === 'spikes' && lut && peakFrames) {
+							// animated spike trap: frame follows the damage phase
+							const fi = this.world.spikeFrame(tx, ty)
+							r.draw(peakFrames[fi], x, y, TILE_SIZE, TILE_SIZE)
+							break
+						}
 						const pulse = biome.hazardType === 'lava' ? 0.85 + 0.15 * Math.sin(this.ui.menuT * 3 + tx + ty) : 1
-						r.draw(hazardR, x, y, TILE_SIZE, TILE_SIZE, rgba(255 * pulse, 255 * pulse, 255 * pulse, 255))
+						// over the v5 floors the hazard reads as a translucent stain,
+						// not an opaque hole
+						const hazA = lut ? 0.7 : 1
+						r.draw(hazardR, x, y, TILE_SIZE, TILE_SIZE, withAlpha(rgba(255 * pulse, 255 * pulse, 255 * pulse, 255), hazA))
 						if (biome.hazardType === 'spikes') r.sprite('spikes', x + 8, y + 8)
 						break
 					}
 					case TILE.PLATE:
-						r.draw(floorR[0], x, y, TILE_SIZE, TILE_SIZE)
+						if (!lut) r.draw(floorR[0], x, y, TILE_SIZE, TILE_SIZE)
 						r.rectOutline(x + 4, y + 4, 8, 8, rgba(220, 200, 120, 255))
 						break
 					case TILE.PLATE_DOWN:
-						r.draw(floorR[0], x, y, TILE_SIZE, TILE_SIZE)
+						if (!lut) r.draw(floorR[0], x, y, TILE_SIZE, TILE_SIZE)
 						r.rect(x + 4, y + 4, 8, 8, rgba(120, 200, 120, 160))
 						break
 				}
+			}
+		}
+
+		// ---- wall-grammar debug overlay (dev) ----
+		if (this.debugWalls && map.visCls) {
+			const CLS_COLORS = {
+				[CLS.FLOOR]: rgba(60, 200, 90, 60),
+				[CLS.RUN_N]: rgba(80, 130, 255, 90),
+				[CLS.RUN_S]: rgba(70, 220, 220, 90),
+				[CLS.SIDE_W]: rgba(200, 160, 60, 90),
+				[CLS.SIDE_E]: rgba(230, 200, 80, 90),
+				[CLS.CORNER_CONVEX]: rgba(255, 120, 255, 130),
+				[CLS.CORNER_CONCAVE]: rgba(255, 60, 160, 150),
+				[CLS.JAMB]: rgba(120, 255, 255, 140),
+				[CLS.PILLAR]: rgba(255, 255, 120, 140),
+				[CLS.CAP_ABOVE]: rgba(140, 100, 255, 90),
+				[CLS.DOORWAY]: rgba(90, 255, 140, 120),
+				[CLS.GATE]: rgba(255, 210, 60, 150),
+				[CLS.FALLBACK]: rgba(255, 140, 40, 160),
+				[CLS.ERROR]: rgba(255, 0, 60, 200),
+			}
+			for (let ty = ty0; ty <= ty1; ty++) {
+				for (let tx = tx0; tx <= tx1; tx++) {
+					const c = CLS_COLORS[map.visCls[ty * map.w + tx]]
+					if (c) r.rect(tx * TILE_SIZE, ty * TILE_SIZE, TILE_SIZE, TILE_SIZE, c)
+				}
+			}
+		}
+
+		// ---- conformance-map fixture labels (dev) ----
+		if (world.labels) {
+			for (const l of world.labels) {
+				r.text(l.text, l.x, l.y, rgba(255, 230, 150, 255))
 			}
 		}
 
@@ -982,16 +1091,35 @@ export class Game {
 		}
 
 		// ---- props ----
+		const v5 = !!atlas.anims.v5_torch
 		for (const prop of world.props) {
 			if (prop.dead || !cam.isVisible(prop.x, prop.y, 20)) continue
 			switch (prop.kind) {
-				case 'chest':
+				case 'chest': {
 					this._shadow(r, prop.x, prop.y + 4, 10)
-					r.sprite(prop.opened ? 'chest_open' : 'chest', prop.x, prop.y, prop.locked ? rgba(150, 130, 170, 255) : 0xffffffff)
+					if (v5) {
+						// v5 chest: 4-frame opening animation driven by openT
+						const fi = prop.opened ? Math.min(3, 1 + Math.floor((prop.openT ?? 1) * 12)) : 0
+						const tintC = prop.locked ? rgba(150, 130, 170, 255) : 0xffffffff
+						r.draw(atlas.anims.v5_chest[fi], prop.x - 8, prop.y - 8, 16, 16, tintC)
+					} else {
+						r.sprite(prop.opened ? 'chest_open' : 'chest', prop.x, prop.y, prop.locked ? rgba(150, 130, 170, 255) : 0xffffffff)
+					}
 					break
+				}
 				case 'barrel':
 					this._shadow(r, prop.x, prop.y + 4, 8)
-					r.sprite('barrel', prop.x, prop.y)
+					r.sprite(prop.sprite && v5 ? prop.sprite : 'barrel', prop.x, prop.y)
+					break
+				case 'decor':
+					// pure dressing: never collides, never interacts
+					if (prop.shadow) this._shadow(r, prop.x, prop.y + 5, 8)
+					if (prop.anim) r.animSprite(prop.anim, this.ui.menuT, prop.x, prop.y, 0xffffffff, 0, false, 1, 8)
+					else r.sprite(prop.sprite, prop.x, prop.y)
+					break
+				case 'key':
+					this._shadow(r, prop.x, prop.y + 6, 7)
+					r.animSprite(v5 ? 'v5_key_gold' : 'item_ring', this.ui.menuT, prop.x, prop.y + Math.sin(this.ui.menuT * 3) * 1.5, 0xffffffff, 0, false, 1, 8)
 					break
 				case 'shrine': {
 					this._shadow(r, prop.x, prop.y + 5, 10)
@@ -1004,7 +1132,14 @@ export class Game {
 					r.animSprite('shop_npc', prop.t ?? this.ui.menuT, prop.x, prop.y)
 					break
 				case 'torch':
-					r.animSprite('torch', prop.t, prop.x, prop.y, 0xffffffff, 0, false, 1, 8)
+					if (v5) {
+						// baked glow halo variant + a soft warm pool that breathes
+						const pulse = 0.10 + 0.03 * Math.sin(prop.t * 5)
+						r.circleFill(prop.x, prop.y + 2, 14 + Math.sin(prop.t * 3) * 1.5, withAlpha(rgba(255, 170, 80, 255), pulse))
+						r.animSprite('v5_torch_light', prop.t, prop.x, prop.y - 6, 0xffffffff, 0, false, 1, 10)
+					} else {
+						r.animSprite('torch', prop.t, prop.x, prop.y, 0xffffffff, 0, false, 1, 8)
+					}
 					break
 				case 'portal': {
 					const s = 1 + Math.sin(this.ui.menuT * 3) * 0.08
@@ -1015,14 +1150,23 @@ export class Game {
 		}
 
 		// ---- entities (y-sorted for correct overlap) ----
+		// Gates join the sort keyed on the BOTTOM of their face cell: a player
+		// in the corridor behind (north of) a closed gate is occluded by it, a
+		// player south of it draws on top of the floor glow.
 		const drawables = []
 		for (const e of world.enemies) {
 			if (!e.dead && cam.isVisible(e.x, e.y, 32)) drawables.push(e)
 		}
 		if (!this.player.dead) drawables.push(this.player)
+		if (atlas.anims.v5_gate) {
+			for (const gate of world.gates) {
+				drawables.push({ kind: 'gate', gate, y: (gate.tiles[0][1] + 1) * TILE_SIZE })
+			}
+		}
 		drawables.sort((a, b) => a.y - b.y)
 		for (const e of drawables) {
 			if (e.kind === 'player') this._drawPlayer(r, e)
+			else if (e.kind === 'gate') this._drawGate(r, e.gate)
 			else this._drawEnemy(r, e)
 		}
 
@@ -1068,6 +1212,19 @@ export class Game {
 
 	_shadow(r, x, y, w) {
 		r.rect(x - w / 2, y, w, 3, rgba(0, 0, 0, 70))
+	}
+
+	/** Animated portcullis: 16x32 frames — face in the gate cell, glow below. */
+	_drawGate(r, gate) {
+		const frames = this.atlas.anims.v5_gate
+		if (!frames) return
+		const fi = gate.opened ? Math.min(4, 1 + Math.floor(gate.openT * 8)) : 0
+		for (const [gtx, gty] of gate.tiles) {
+			// a soft radial pool under the frame feathers the square edge of
+			// the baked glow (presentation only; the asset is drawn as-authored)
+			r.circleFill(gtx * TILE_SIZE + 8, (gty + 1) * TILE_SIZE + 6, 11, withAlpha(rgba(90, 140, 255, 255), gate.opened ? 0.10 : 0.14))
+			r.draw(frames[fi], gtx * TILE_SIZE, gty * TILE_SIZE, 16, 32)
+		}
 	}
 
 	_drawPlayer(r, p) {

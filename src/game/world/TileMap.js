@@ -9,6 +9,7 @@ export const TILE = {
 	PLATE: 5, // puzzle pressure plate
 	PLATE_DOWN: 6,
 	CRACK: 7, // breakable secret wall
+	GATE: 8, // locked portcullis: solid until opened with a key
 }
 
 /**
@@ -39,7 +40,7 @@ export class TileMap {
 	}
 
 	isSolidTile(t) {
-		return t === TILE.VOID || t === TILE.WALL || t === TILE.CRACK
+		return t === TILE.VOID || t === TILE.WALL || t === TILE.CRACK || t === TILE.GATE
 	}
 
 	isSolid(tx, ty) {

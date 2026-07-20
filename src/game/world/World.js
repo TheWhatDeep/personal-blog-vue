@@ -2,6 +2,7 @@ import { ObjectPool } from '../core/ObjectPool.js'
 import { SpatialGrid } from '../core/SpatialGrid.js'
 import { createEnemy } from '../entities/Enemy.js'
 import { TILE, TILE_SIZE } from './TileMap.js'
+import { computeTileVisuals } from './TileVisuals.js'
 import { dist } from '../core/MathUtil.js'
 
 /**
@@ -55,7 +56,79 @@ export class World {
 			64
 		)
 
+		this.gates = [] // locked portcullis gates (opened with keys)
+		this.keysHeld = 0
+		this.time = 0
+		this.visualSeed = dungeon.visualSeed ?? 1234
+		this.conformance = !!dungeon.conformance // dev wall-test map: clean render
+		this.labels = dungeon.labels ?? null
+
 		this.instantiate(dungeon.spawns)
+		this.recomputeVisuals()
+	}
+
+	// ---- spike traps: shared extend/retract cycle, damage only while out ----
+	// Nearby spikes share a phase (patches fire together) with small offsets
+	// between patches so the whole floor never pulses in unison.
+	spikePhase(tx, ty) {
+		const period = 2.4
+		const off = ((((tx >> 1) * 7 + (ty >> 1) * 13) % 8) / 8) * 1.2
+		return ((this.time + off) % period) / period
+	}
+
+	spikeFrame(tx, ty) {
+		const p = this.spikePhase(tx, ty)
+		if (p < 0.45) return 0 // hidden
+		if (p < 0.55) return 1 // warning nubs
+		if (p < 0.63) return 2 // rising
+		if (p < 0.92) return 3 // fully extended
+		return 4 // retracting
+	}
+
+	/** True while the trap can hurt (extended frames). */
+	spikesOut(tx, ty) {
+		return this.spikeFrame(tx, ty) >= 3
+	}
+
+	/**
+	 * Gate interaction: walking into a locked gate with a key opens it —
+	 * collision flips FLOOR only after the open animation has played a bit,
+	 * so the portcullis visibly rises before anything can pass.
+	 */
+	_updateGates(dt, player) {
+		for (const gate of this.gates) {
+			if (gate.opened) {
+				gate.openT += dt
+				if (!gate.passable && gate.openT > 0.35) {
+					gate.passable = true
+					for (const [tx, ty] of gate.tiles) this.map.set(tx, ty, TILE.FLOOR)
+				}
+				continue
+			}
+			// closest approach to any gate tile
+			let near = false
+			for (const [tx, ty] of gate.tiles) {
+				if (dist(player.x, player.y, tx * TILE_SIZE + 8, ty * TILE_SIZE + 8) < 22) { near = true; break }
+			}
+			if (!near) continue
+			if (this.keysHeld > 0) {
+				this.keysHeld--
+				gate.opened = true
+				gate.openT = 0
+				this.game.audio.play('chest', 0.8)
+				this.game.ui.toast('The gate rumbles open...', 0xff4dd2ff)
+				this.game.camera.shake(2)
+			}
+		}
+	}
+
+	/**
+	 * (Re)derive the connected-wall visual layer from the collision grid.
+	 * Cheap (one pass over the map) — called on load and after geometry
+	 * changes (broken secret walls).
+	 */
+	recomputeVisuals() {
+		computeTileVisuals(this.map, this.rooms, this.visualSeed)
 	}
 
 	instantiate(spawns) {
@@ -88,6 +161,15 @@ export class World {
 					break
 				case 'puzzle':
 					this.puzzles.push({ room: s.room, plates: s.plates.map((p) => ({ ...p, pressed: false })), done: false, x: s.x, y: s.y })
+					break
+				case 'key':
+					this.props.push({ kind: 'key', x: s.x, y: s.y, r: 6, dead: false })
+					break
+				case 'gate':
+					this.gates.push({ tiles: s.tiles, opened: false, openT: 0, passable: false })
+					break
+				case 'decor':
+					this.props.push({ kind: 'decor', x: s.x, y: s.y, sprite: s.sprite, anim: s.anim, shadow: !!s.shadow })
 					break
 			}
 		}
@@ -216,9 +298,11 @@ export class World {
 	update(dt) {
 		const game = this.game
 		const player = game.player
+		this.time += dt
 
 		this._updateProjectiles(dt)
 		this._updateHazards(dt)
+		this._updateGates(dt, player)
 		for (let i = this.effects.length - 1; i >= 0; i--) {
 			const fx = this.effects[i]
 			fx.t += dt
@@ -232,8 +316,18 @@ export class World {
 		for (const prop of this.props) {
 			if (prop.kind === 'torch') {
 				prop.t += dt
-				if (Math.random() < dt * 8) {
-					game.particles.burst({ x: prop.x, y: prop.y - 5, count: 1, color: [0xff2a8aff, 0xff66d1ff], speed: 8, life: 0.4, gravity: -30, jitter: 2 })
+				if (Math.random() < dt * 6) {
+					game.particles.burst({ x: prop.x, y: prop.y - 8, count: 1, color: [0xff2a8aff, 0xff66d1ff], speed: 8, life: 0.4, gravity: -30, jitter: 2 })
+				}
+			} else if (prop.kind === 'chest' && prop.opened) {
+				prop.openT = (prop.openT ?? 0) + dt // drives the open animation
+			} else if (prop.kind === 'key' && !prop.dead) {
+				if (dist(player.x, player.y, prop.x, prop.y) < player.r + 8) {
+					prop.dead = true
+					this.keysHeld++
+					game.audio.play('pickup')
+					game.ui.toast('Found a gate key!', 0xff4dd2ff)
+					game.particles.burst({ x: prop.x, y: prop.y, count: 10, color: 0xff4dd2ff, speed: 50, life: 0.5 })
 				}
 			}
 		}
@@ -351,6 +445,7 @@ export class World {
 			stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1])
 		}
 		this.game.audio.play('explosion', 0.5)
+		this.recomputeVisuals() // walls changed shape: re-derive caps/faces
 	}
 
 	_updateHazards(dt) {

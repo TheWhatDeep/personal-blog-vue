@@ -9,6 +9,10 @@ licensed packs (free for non-commercial and commercial use):
 - **2D Pixel Dungeon Asset Pack v2.0** by **Pixel Poem** (itch.io) —
   dungeon tileset, torches, chests, crates, spike traps, flasks, coins,
   and the wisp flame.
+- **2D Dungeon Asset Pack v5.2 (Dungeon Tileset II)** by **Pixel Poem**
+  (itch.io) — the connected-wall tileset (caps, faces, corners), prop
+  sheet, and the animated torch/gate/spike/chest/coin/key/flag strips
+  (`v5/`).
 - **Bold Pixels** font (`BoldPixels.ttf`) from itch.io — display typeface
   for titles and headers, rasterized into the texture atlas at its native
   16px grid.
