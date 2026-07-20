@@ -300,11 +300,19 @@ export class Renderer {
 		}
 	}
 
-	/** Draw a text string using the baked bitmap font. Returns pixel width. */
+	/** Draw body text using the micro pixel font. Returns pixel width. */
 	text(str, x, y, color = WHITE, scale = 1, align = 'left') {
-		const font = this.atlas.font
+		return this._text(this.atlas.font, str, x, y, color, scale, align)
+	}
+
+	/** Draw display/heading text using the big font (falls back to body). */
+	textBig(str, x, y, color = WHITE, scale = 1, align = 'left') {
+		return this._text(this.atlas.fontBig ?? this.atlas.font, str, x, y, color, scale, align)
+	}
+
+	_text(font, str, x, y, color, scale, align) {
 		if (align !== 'left') {
-			const w = this.measureText(str, scale)
+			const w = this._measure(font, str, scale)
 			if (align === 'center') x -= w / 2
 			else if (align === 'right') x -= w
 		}
@@ -327,8 +335,11 @@ export class Renderer {
 		return cx - x
 	}
 
-	measureText(str, scale = 1) {
-		const font = this.atlas.font
+	measureText(str, scale = 1, big = false) {
+		return this._measure(big ? this.atlas.fontBig ?? this.atlas.font : this.atlas.font, str, scale)
+	}
+
+	_measure(font, str, scale) {
 		let w = 0
 		let max = 0
 		for (let i = 0; i < str.length; i++) {

@@ -1,4 +1,5 @@
 import { SPRITES } from './PixelArt.js'
+import { bakeMicroFont } from './MicroFont.js'
 import { Rng } from '../core/Rng.js'
 
 /**
@@ -27,7 +28,8 @@ export class Atlas {
 		this.ctx = this.canvas.getContext('2d', { willReadFrequently: true })
 		this.regions = {}
 		this.anims = {} // name -> [regions] for multi-frame sprites
-		this.font = null
+		this.font = null // body font (micro pixel font)
+		this.fontBig = null // display font for titles/headers (asset pack TTF)
 		// shelf packer state
 		this._x = 0
 		this._y = 0
@@ -164,11 +166,15 @@ export class Atlas {
 	}
 
 	_packFont() {
-		this.bakeFont('bold 8px monospace', 10, 8)
+		// body font: hand-authored 3x5 pixel font, crisp by construction.
+		// The display font (fontBig) arrives with the asset pack; until then
+		// headings fall back to the body font.
+		this.font = bakeMicroFont(this)
 	}
 
 	/**
-	 * Rasterize a font into fresh atlas slots and make it the active UI font.
+	 * Rasterize a @font-face into fresh atlas slots as the DISPLAY font
+	 * (titles/headers — body text keeps the micro font).
 	 *
 	 * Each glyph is drawn on a private oversized canvas, thresholded to
 	 * opaque white / transparent, ink-cropped horizontally and copied into
@@ -228,7 +234,7 @@ export class Atlas {
 			}
 		}
 
-		this.font = { glyphs, lineHeight, spaceWidth: 4, css: cssFont }
+		this.fontBig = { glyphs, lineHeight, spaceWidth: 4, css: cssFont }
 	}
 }
 

@@ -173,7 +173,7 @@ export class UI {
 		// boss banner
 		if (this.banner) {
 			const a = Math.min(1, this.banner.t)
-			r.text(this.banner.text, vw / 2, r.viewH * 0.3, withAlpha(rgba(255, 80, 80, 255), a), 2, 'center')
+			r.textBig(this.banner.text, vw / 2, r.viewH * 0.3, withAlpha(rgba(255, 80, 80, 255), a), 1.5, 'center')
 		}
 	}
 
@@ -246,8 +246,8 @@ export class UI {
 		if (!boss || boss.dead) return
 		const w = Math.min(220, r.viewW - 180)
 		const x = (r.viewW - w) / 2
-		const y = 26
-		r.text(boss.bossDef.name, r.viewW / 2, y - 11, COL.danger, 1, 'center')
+		const y = 28
+		r.textBig(boss.bossDef.name, r.viewW / 2, y - 14, COL.danger, 1, 'center')
 		this.bar(r, x, y, w, 8, boss.hp / boss.maxHp, COL.hp, COL.hpBack)
 		// phase pips
 		const phases = boss.bossDef.phases.length
@@ -283,9 +283,9 @@ export class UI {
 			r.rect(x, y, 2, 2, rgba(120, 100, 200, 60))
 		}
 
-		r.text('DUNGEON', cx, cy - 90, rgba(232, 181, 58, 255), 3, 'center')
-		r.text('DEPTHS', cx, cy - 54, rgba(180, 120, 255, 255), 3, 'center')
-		r.text('a roguelite dungeon crawler', cx, cy - 14, COL.dim, 1, 'center')
+		r.textBig('DUNGEON', cx, cy - 88, rgba(232, 181, 58, 255), 2.5, 'center')
+		r.textBig('DEPTHS', cx, cy - 54, rgba(180, 120, 255, 255), 2.5, 'center')
+		r.text('a roguelite dungeon crawler', cx, cy - 16, COL.dim, 1, 'center')
 
 		const endlessUnlocked = game.save.data.endlessUnlocked
 		const items = [
@@ -315,7 +315,7 @@ export class UI {
 		const game = this.game
 		const cx = r.viewW / 2
 		r.rect(0, 0, r.viewW, r.viewH, rgba(10, 8, 18, 255))
-		r.text(game.pendingMode === 'endless' ? 'ENDLESS MODE — CHOOSE YOUR HERO' : 'CHOOSE YOUR HERO', cx, 12, COL.sel, 1.5, 'center')
+		r.textBig(game.pendingMode === 'endless' ? 'ENDLESS MODE — CHOOSE YOUR HERO' : 'CHOOSE YOUR HERO', cx, 10, COL.sel, 1, 'center')
 
 		const n = CLASS_LIST.length
 		const cardW = 56
@@ -411,7 +411,7 @@ export class UI {
 		const game = this.game
 		const cx = r.viewW / 2
 		r.rect(0, 0, r.viewW, r.viewH, rgba(10, 8, 18, 255))
-		r.text('RECORDS & ACHIEVEMENTS', cx, 8, COL.sel, 1.4, 'center')
+		r.textBig('RECORDS & ACHIEVEMENTS', cx, 6, COL.sel, 1, 'center')
 
 		const st = game.save.data.stats
 		const hs = game.save.data.highscores
@@ -466,11 +466,11 @@ export class UI {
 		const tabs = ['EQUIPMENT', 'CHARACTER', 'SKILLS']
 		// measured layout so tab labels never collide regardless of font
 		const gap = 14
-		const total = tabs.reduce((w, t) => w + r.measureText(t) + gap, -gap)
+		const total = tabs.reduce((w, t) => w + r.measureText(t, 1, true) + gap, -gap)
 		let tx = cx - total / 2
 		tabs.forEach((t, i) => {
-			r.text(t, tx, 6, i === this.tab ? COL.sel : COL.dim)
-			tx += r.measureText(t) + gap
+			r.textBig(t, tx, 6, i === this.tab ? COL.sel : COL.dim)
+			tx += r.measureText(t, 1, true) + gap
 		})
 		r.text('Q/E or L/R switch tabs', cx, r.viewH - 12, COL.dim, 1, 'center')
 
@@ -617,7 +617,7 @@ export class UI {
 		const cx = r.viewW / 2
 		const cy = r.viewH / 2
 		r.rect(0, 0, r.viewW, r.viewH, rgba(20, 4, 8, 230))
-		r.text('YOU DIED', cx, cy - 60, COL.danger, 3, 'center')
+		r.textBig('YOU DIED', cx, cy - 64, COL.danger, 2, 'center')
 		const run = game.runSummary || {}
 		const lines = [
 			`Floor reached: ${run.floor ?? 1}`,
@@ -641,7 +641,7 @@ export class UI {
 			const y = ((i * 37 + this.menuT * 20) % r.viewH)
 			r.rect(x, y, 2, 2, rgba(232, 181, 58, 120))
 		}
-		r.text('VICTORY!', cx, cy - 64, COL.gold, 3, 'center')
+		r.textBig('VICTORY!', cx, cy - 68, COL.gold, 2, 'center')
 		r.text('The Void Sovereign is no more.', cx, cy - 34, COL.text, 1, 'center')
 		r.text('The depths below are endless... how far can you go?', cx, cy - 22, COL.dim, 1, 'center')
 		this.drawMenuList(r, [
