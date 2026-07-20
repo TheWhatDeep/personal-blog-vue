@@ -11,10 +11,10 @@
 export const BOSSES = {
 	tyrant: {
 		id: 'tyrant', name: 'The Grave Tyrant', sprite: 'boss_tyrant',
-		music: 'boss_tyrant', hp: 380, speed: 30, radius: 12, touchDamage: 14,
-		xp: 220, poise: 130, projectileSprite: 'orb_bone',
+		music: 'boss_tyrant', hp: 6000, speed: 30, radius: 12, touchDamage: 14,
+		xp: 700, poise: 400, projectileSprite: 'orb_bone',
 		desc: 'Undead king of the Sunken Crypt.',
-		loot: { relicName: 'Crown of the Tyrant', gold: [60, 90] },
+		loot: { relicName: 'Crown of the Tyrant', gold: [120, 180] },
 		phases: [
 			{
 				hpAbove: 0.65, speedMul: 1,
@@ -48,10 +48,10 @@ export const BOSSES = {
 
 	broodmother: {
 		id: 'broodmother', name: 'Broodmother Vex', sprite: 'boss_spider',
-		music: 'boss_spider', hp: 700, speed: 55, radius: 13, touchDamage: 16,
-		xp: 420, poise: 190, projectileSprite: 'orb_poison',
+		music: 'boss_spider', hp: 11000, speed: 55, radius: 13, touchDamage: 16,
+		xp: 1300, poise: 550, projectileSprite: 'orb_poison',
 		desc: 'Venomous matriarch of the Caverns.',
-		loot: { relicName: 'Fang of the Brood', gold: [90, 130] },
+		loot: { relicName: 'Fang of the Brood', gold: [180, 260] },
 		phases: [
 			{
 				hpAbove: 0.6, speedMul: 1,
@@ -85,10 +85,10 @@ export const BOSSES = {
 
 	colossus: {
 		id: 'colossus', name: 'The Forge Colossus', sprite: 'boss_golem',
-		music: 'boss_golem', hp: 1150, speed: 24, radius: 14, touchDamage: 20,
-		xp: 650, poise: 300, projectileSprite: 'orb_fire',
+		music: 'boss_golem', hp: 16000, speed: 24, radius: 14, touchDamage: 20,
+		xp: 2000, poise: 850, projectileSprite: 'orb_fire',
 		desc: 'A furnace given hateful life.',
-		loot: { relicName: 'Molten Core', gold: [120, 180] },
+		loot: { relicName: 'Molten Core', gold: [240, 360] },
 		phases: [
 			{
 				hpAbove: 0.65, speedMul: 1,
@@ -121,10 +121,10 @@ export const BOSSES = {
 
 	lich: {
 		id: 'lich', name: 'Maleth the Frost Lich', sprite: 'boss_lich',
-		music: 'boss_lich', hp: 1600, speed: 40, radius: 12, touchDamage: 18,
-		xp: 900, poise: 250, projectileSprite: 'orb_frost',
+		music: 'boss_lich', hp: 22000, speed: 40, radius: 12, touchDamage: 18,
+		xp: 2800, poise: 700, projectileSprite: 'orb_frost',
 		desc: 'Master of ice and stolen time.',
-		loot: { relicName: 'Heart of Winter', gold: [160, 240] },
+		loot: { relicName: 'Heart of Winter', gold: [320, 480] },
 		phases: [
 			{
 				hpAbove: 0.7, speedMul: 1,
@@ -160,10 +160,10 @@ export const BOSSES = {
 
 	sovereign: {
 		id: 'sovereign', name: 'The Void Sovereign', sprite: 'boss_void',
-		music: 'boss_void', hp: 2300, speed: 48, radius: 14, touchDamage: 24,
-		xp: 1500, poise: 380, projectileSprite: 'orb_void',
+		music: 'boss_void', hp: 30000, speed: 48, radius: 14, touchDamage: 24,
+		xp: 4500, poise: 1000, projectileSprite: 'orb_void',
 		desc: 'The abyss looks back.',
-		loot: { relicName: 'Eye of the Sovereign', gold: [250, 400] },
+		loot: { relicName: 'Eye of the Sovereign', gold: [500, 800] },
 		phases: [
 			{
 				hpAbove: 0.7, speedMul: 1,
