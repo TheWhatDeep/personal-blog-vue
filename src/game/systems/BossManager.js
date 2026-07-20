@@ -25,6 +25,7 @@ export class BossManager {
 		this.moveTime = 0
 		this.moveStarted = false
 		this.introT = 0
+		this.dmgScale = 1
 		this.spiral = null
 		this.beams = null
 		this.charging = null
@@ -34,6 +35,11 @@ export class BossManager {
 
 	get active() {
 		return this.boss && !this.boss.dead
+	}
+
+	/** Boss attack damage through the difficulty equalizer. */
+	_dmg(amount) {
+		return Math.round(amount * (this.dmgScale ?? 1))
 	}
 
 	update(dt) {
@@ -106,8 +112,10 @@ export class BossManager {
 		const def = BOSSES[spawn.bossId]
 		this.def = def
 
-		// endless mode / repeat scaling
-		const hpMul = spawn.hpMul ?? 1
+		// endless mode / repeat scaling + souls-like level equalizer
+		const scaling = game.levelScaling()
+		const hpMul = (spawn.hpMul ?? 1) * scaling.hp
+		this.dmgScale = scaling.dmg
 		const boss = {
 			id: -1,
 			kind: 'boss',
@@ -252,7 +260,7 @@ export class BossManager {
 					const a = (i / move.count) * TAU + Math.random() * 0.2
 					world.fireProjectile({
 						x: boss.x, y: boss.y, angle: a,
-						speed: move.speed, damage: move.damage,
+						speed: move.speed, damage: this._dmg(move.damage),
 						team: 'enemy', sprite: this.def.projectileSprite,
 						range: 300, status: move.status, colors: [0xffb06cff],
 					})
@@ -277,14 +285,14 @@ export class BossManager {
 						g.particles.burst({ x: boss.x, y: boss.y, count: 24, color: [0xff6a7a8a, 0xffffffff], speed: 130, life: 0.5 })
 						const p = g.player
 						if (!p.dead && dist(boss.x, boss.y, p.x, p.y) < move.radius + p.r) {
-							g.combat.damagePlayer(move.damage, { kx: p.x - boss.x, ky: p.y - boss.y })
+							g.combat.damagePlayer(this._dmg(move.damage), { kx: p.x - boss.x, ky: p.y - boss.y })
 						}
 						if (move.ring) {
 							for (let i = 0; i < move.ring.count; i++) {
 								const a = (i / move.ring.count) * TAU
 								world.fireProjectile({
 									x: boss.x, y: boss.y, angle: a,
-									speed: move.ring.speed, damage: Math.round(move.damage * 0.6),
+									speed: move.ring.speed, damage: this._dmg(move.damage * 0.6),
 									team: 'enemy', sprite: this.def.projectileSprite, range: 260,
 								})
 							}
@@ -352,7 +360,7 @@ export class BossManager {
 					const a = Math.random() * TAU
 					const c = world.spawnEnemy('cultist', boss.x + Math.cos(a) * 40, boss.y + Math.sin(a) * 40, {
 						hpMul: (boss.maxHp * move.hpFrac) / 24,
-						dmgMul: 1.2,
+						dmgMul: 1.2 * (this.dmgScale ?? 1),
 					})
 					c.spriteOverride = this.def.sprite
 					c.scale = 0.55
@@ -376,7 +384,7 @@ export class BossManager {
 							g.world.addHazard({
 								x: hx, y: hy, r: move.radius,
 								kind: move.kind,
-								damage: move.kind === 'web' ? 0 : 5,
+								damage: move.kind === 'web' ? 0 : this._dmg(5),
 								tick: 0.5,
 								duration: move.duration,
 								team: 'enemy',
@@ -442,7 +450,7 @@ export class BossManager {
 					world.fireProjectile({
 						x: boss.x, y: boss.y,
 						angle: s.base + (arm / s.move.arms) * TAU,
-						speed: s.move.speed, damage: s.move.damage,
+						speed: s.move.speed, damage: this._dmg(s.move.damage),
 						team: 'enemy', sprite: this.def.projectileSprite,
 						range: 280, status: s.move.status,
 					})
@@ -466,7 +474,7 @@ export class BossManager {
 						const d = pointRayDistance(player.x, player.y, boss.x, boss.y, a, b.move.length)
 						if (d < 7 + player.r) {
 							b.tickTimer = 0.4
-							game.combat.damagePlayer(b.move.damage, { kx: player.x - boss.x, ky: player.y - boss.y })
+							game.combat.damagePlayer(this._dmg(b.move.damage), { kx: player.x - boss.x, ky: player.y - boss.y })
 							break
 						}
 					}
@@ -482,7 +490,7 @@ export class BossManager {
 			game.particles.burst({ x: boss.x, y: boss.y, count: 1, color: 0xffb1a59a, speed: 20, life: 0.3 })
 			if (!c.hit && !player.dead && dist(boss.x, boss.y, player.x, player.y) < boss.r + player.r + 2) {
 				c.hit = true
-				game.combat.damagePlayer(c.move.damage, { kx: c.dx, ky: c.dy })
+				game.combat.damagePlayer(this._dmg(c.move.damage), { kx: c.dx, ky: c.dy })
 			}
 			if (c.timeLeft <= 0) this.charging = null
 		}
@@ -496,7 +504,7 @@ export class BossManager {
 				world.addTelegraph({
 					x: mx, y: my, r: move.radius, dur: move.telegraph, color: 0x33005aff,
 					onDone: (g) => {
-						g.combat.explode(mx, my, move.radius, move.damage, 'enemy', null, [0xff2a8aff, 0xff66d1ff])
+						g.combat.explode(mx, my, move.radius, this._dmg(move.damage), 'enemy', null, [0xff2a8aff, 0xff66d1ff])
 					},
 				})
 			}
@@ -511,7 +519,7 @@ export class BossManager {
 		const rr = boss.r + player.r + 1
 		if ((boss.x - player.x) ** 2 + (boss.y - player.y) ** 2 < rr * rr) {
 			boss.touchTimer = 1.0
-			game.combat.damagePlayer(this.def.touchDamage, { kx: player.x - boss.x, ky: player.y - boss.y })
+			game.combat.damagePlayer(this._dmg(this.def.touchDamage), { kx: player.x - boss.x, ky: player.y - boss.y })
 		}
 	}
 

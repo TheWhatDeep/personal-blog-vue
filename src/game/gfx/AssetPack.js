@@ -227,6 +227,7 @@ export function applyAssetPack(atlas, imgs) {
 		}
 		strip('attack', `${name}_attack`)
 		strip('attack2', `${name}_attack2`)
+		strip('attack3', `${name}_attack3`)
 		strip('hurt', `${name}_hurt`)
 		strip('death', `${name}_death`)
 	}

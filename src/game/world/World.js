@@ -93,6 +93,11 @@ export class World {
 	}
 
 	spawnEnemy(id, x, y, opts = {}) {
+		// difficulty equalizer: hostile spawns scale with overleveling
+		if ((opts.team ?? 'enemy') === 'enemy') {
+			const s = this.game.levelScaling()
+			opts = { ...opts, hpMul: (opts.hpMul ?? 1) * s.hp, dmgMul: (opts.dmgMul ?? 1) * s.dmg }
+		}
 		const e = createEnemy(id, x, y, opts)
 		this.enemies.push(e)
 		return e

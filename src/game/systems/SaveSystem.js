@@ -26,6 +26,7 @@ const DEFAULT_SAVE = () => ({
 		volumes: { master: 0.8, music: 0.7, sfx: 0.8 },
 		screenShake: true,
 		showDamageNumbers: true,
+		levelScaling: true, // souls-like equalizer: enemies scale with overleveling
 	},
 	stats: {
 		kills: 0, eliteKills: 0, bossKills: 0, sovereignKills: 0,

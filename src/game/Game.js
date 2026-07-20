@@ -14,6 +14,7 @@ import { generateDungeon } from './world/DungeonGenerator.js'
 import { TILE, TILE_SIZE } from './world/TileMap.js'
 import { BIOMES, biomeForFloor, FINAL_FLOOR } from './data/biomes.js'
 import { CLASSES, CLASS_LIST } from './data/classes.js'
+import { SKILLS } from './data/skills.js'
 import { Physics } from './systems/Physics.js'
 import { Combat } from './systems/Combat.js'
 import { StatusEffects } from './systems/StatusEffects.js'
@@ -24,6 +25,7 @@ import { BossManager } from './systems/BossManager.js'
 import { EndlessMode } from './systems/EndlessMode.js'
 import { SaveSystem } from './systems/SaveSystem.js'
 import { UI } from './ui/UI.js'
+import { MapEditor } from './editor/MapEditor.js'
 import { dist } from './core/MathUtil.js'
 
 /**
@@ -64,6 +66,8 @@ export class Game {
 		this.bossManager = new BossManager(this)
 		this.endless = new EndlessMode(this)
 		this.ui = new UI(this)
+		this.editor = new MapEditor(this)
+		this.input.attachMouse(canvas, this.renderer)
 
 		this.state = 'menu'
 		this.prevState = 'menu'
@@ -80,6 +84,8 @@ export class Game {
 		this.deathTimer = 0
 		this.saveTimer = 0
 		this.rng = new Rng()
+		this.godMode = false
+		this.showPerf = false
 
 		// apply persisted settings
 		const s = this.save.settings
@@ -149,10 +155,43 @@ export class Game {
 
 		if (mode === 'endless') {
 			this._loadEndlessArena()
+		} else if (mode === 'custom') {
+			const dungeon = this.editor.buildDungeon()
+			if (!dungeon) {
+				this.state = 'editor'
+				return
+			}
+			this.world = new World(this, dungeon)
+			this._placePlayer()
+			this.audio.setTrack(dungeon.biome.music)
+			this.ui.toast('Testing your map — stairs or death return to the editor')
 		} else {
 			this.loadFloor(1)
 		}
 		this.state = 'playing'
+	}
+
+	/** Leave a custom-map test and return to the editor. */
+	exitCustomTest(msg) {
+		this.mode = 'story'
+		this.runActive = false
+		this.player = null
+		this.world = null
+		this.bossManager.reset()
+		this.state = 'editor'
+		this.audio.setTrack('menu')
+		if (msg) this.editor.toast(msg)
+	}
+
+	openEditor() {
+		this.state = 'editor'
+		this.audio.setTrack('menu')
+		this.camera.snapTo(this.editor.camX, this.editor.camY)
+	}
+
+	exitEditor() {
+		this.state = 'menu'
+		this.ui.sel = 0
 	}
 
 	/** Continue the current character into endless mode (post-victory). */
@@ -200,6 +239,24 @@ export class Game {
 		this.loadFloor(this.floor + 1)
 	}
 
+	/**
+	 * Souls-like difficulty equalizer: when the player's level exceeds the
+	 * floor's expected level, enemies and bosses scale up so clearing
+	 * earlier/lower floors while overleveled stays dangerous. Endless mode
+	 * has its own wave-based curve and is left alone.
+	 */
+	levelScaling() {
+		if (!this.save.settings.levelScaling || !this.player || this.mode === 'endless') {
+			return { hp: 1, dmg: 1 }
+		}
+		const expected = 1 + (this.floor - 1) * 1.7
+		const over = Math.max(0, this.player.level - expected)
+		return {
+			hp: Math.min(3.2, 1 + over * 0.13),
+			dmg: Math.min(2.6, 1 + over * 0.09),
+		}
+	}
+
 	endRun(toState) {
 		this.runActive = false
 		this.player = null
@@ -232,6 +289,8 @@ export class Game {
 			case 'shop': this.updateShop(); break
 			case 'dead': this.updateDeath(); break
 			case 'victory': this.updateVictory(); break
+			case 'debug': this.updateDebug(); break
+			case 'editor': this.editor.update(dt); break
 		}
 
 		this.input.consumeAny()
@@ -250,6 +309,11 @@ export class Game {
 		const player = this.player
 
 		if (!player.dead) {
+			if (input.pressed('debug')) {
+				this.state = 'debug'
+				this.ui.sel = 0
+				return
+			}
 			if (input.pressed('pause')) {
 				this.state = 'paused'
 				this.ui.sel = 0
@@ -275,6 +339,8 @@ export class Game {
 
 			this._updateInteraction()
 			if (input.pressed('interact') && this.interactTarget) this._doInteract()
+			// interacting can end the run (custom-map exit, victory portal)
+			if (this.state !== 'playing' || !this.world) return
 		}
 
 		this.ai.update(dt)
@@ -286,12 +352,15 @@ export class Game {
 
 		this.camera.follow(player.x, player.y, dt)
 
-		// death → summary screen after a beat
+		// death → summary screen after a beat (custom tests return to the editor)
 		if (player.dead && this.deathTimer > 0) {
 			this.deathTimer -= dt
 			if (this.deathTimer <= 0) {
-				this.state = 'dead'
-				this.ui.sel = 0
+				if (this.mode === 'custom') this.exitCustomTest('You died — tweak the map and try again!')
+				else {
+					this.state = 'dead'
+					this.ui.sel = 0
+				}
 			}
 		}
 	}
@@ -337,7 +406,8 @@ export class Game {
 		const t = this.interactTarget
 		switch (t.kind) {
 			case 'stairs':
-				this.nextFloor()
+				if (this.mode === 'custom') this.exitCustomTest('Map complete! Nice work.')
+				else this.nextFloor()
 				break
 			case 'chest':
 				if (!t.locked) this.loot.openChest(t)
@@ -385,7 +455,7 @@ export class Game {
 
 	updateMenu() {
 		const input = this.input
-		this._menuNav(4)
+		this._menuNav(5)
 		if (input.pressed('confirm')) {
 			this.audio.play('ui_select')
 			switch (this.ui.sel) {
@@ -404,9 +474,12 @@ export class Game {
 					}
 					break
 				case 2:
-					this.state = 'stats'
+					this.openEditor()
 					break
 				case 3:
+					this.state = 'stats'
+					break
+				case 4:
 					this.state = 'settings'
 					this.prevState = 'menu'
 					this.ui.sel = 0
@@ -427,7 +500,7 @@ export class Game {
 			this.audio.play('ui_move')
 		}
 		if (input.pressed('cancel')) {
-			this.state = 'menu'
+			this.state = this.pendingMode === 'custom' ? 'editor' : 'menu'
 			this.ui.sel = 0
 			this.audio.play('ui_back')
 			return
@@ -457,7 +530,10 @@ export class Game {
 				case 0: this.state = 'playing'; break
 				case 1: this.state = 'inventory'; this.ui.sel = 0; this.ui.tab = 0; break
 				case 2: this.state = 'settings'; this.prevState = 'paused'; this.ui.sel = 0; break
-				case 3: this.endRun('menu'); break
+				case 3:
+					if (this.mode === 'custom') this.exitCustomTest()
+					else this.endRun('menu')
+					break
 			}
 		}
 	}
@@ -514,7 +590,7 @@ export class Game {
 	updateSettings() {
 		const input = this.input
 		const s = this.save.settings
-		this._menuNav(6)
+		this._menuNav(7)
 
 		const adjust = (delta) => {
 			const vols = ['master', 'music', 'sfx']
@@ -536,9 +612,13 @@ export class Game {
 					this.audio.play('ui_select')
 					break
 				case 4:
-					this.toggleFullscreen()
+					s.levelScaling = !s.levelScaling
+					this.audio.play('ui_select')
 					break
 				case 5:
+					this.toggleFullscreen()
+					break
+				case 6:
 					this.save.save()
 					this.state = this.prevState
 					this.ui.sel = 0
@@ -601,6 +681,113 @@ export class Game {
 		}
 	}
 
+	/** Debug/cheat panel actions ([`] or F9 in a run). Labels are dynamic. */
+	debugActions() {
+		const p = this.player
+		const give = (msg) => this.ui.toast(msg, 0xff3ad2e8)
+		return [
+			{ label: `God Mode: ${this.godMode ? 'ON' : 'OFF'}`, fn: () => { this.godMode = !this.godMode } },
+			{ label: `Perf Overlay: ${this.showPerf ? 'ON' : 'OFF'}`, fn: () => { this.showPerf = !this.showPerf } },
+			{ label: '+1,000 Gold', fn: () => { p.gold += 1000; give('+1000g') } },
+			{ label: '+5 Attribute Points', fn: () => { p.attrPoints += 5; give('+5 attribute points') } },
+			{ label: '+5 Skill Points', fn: () => { p.skillPoints += 5; give('+5 skill points') } },
+			{ label: 'Level Up', fn: () => p.addXp(p.xpNext - p.xp, this) },
+			{ label: 'Full Heal & Mana', fn: () => { p.hp = p.maxHp; p.mana = p.maxMana } },
+			{
+				label: 'Give Epic Item', fn: () => {
+					const item = this.loot.generateItem(this.floor, { forceRarity: 3, classId: p.classDef.id })
+					this.world.dropPickup('item', p.x, p.y - 10, { item })
+				},
+			},
+			{
+				label: 'Give Legendary Item', fn: () => {
+					const item = this.loot.generateItem(this.floor, { forceRarity: 4, classId: p.classDef.id })
+					this.world.dropPickup('item', p.x, p.y - 10, { item })
+				},
+			},
+			{ label: '+5 Potions (each)', fn: () => { p.potions.hp += 5; p.potions.mp += 5; give('+5 potions') } },
+			{
+				label: 'Learn Random New Skill', fn: () => {
+					const known = new Set(p.skills.map((s) => s.id))
+					const pool = Object.keys(SKILLS).filter((id) => !known.has(id))
+					if (!pool.length || p.skills.length >= 8) return give('No more skill slots')
+					const id = pool[Math.floor(Math.random() * pool.length)]
+					p.skills.push({ id, level: 1, cd: 0 })
+					give(`Learned ${SKILLS[id].name}!`)
+				},
+			},
+			{
+				label: 'Remove Last Skill', fn: () => {
+					if (p.skills.length > 1) give(`Forgot ${SKILLS[p.skills.pop().id].name}`)
+				},
+			},
+			{ label: 'All Skills +1 Level', fn: () => { for (const s of p.skills) s.level = Math.min(5, s.level + 1) } },
+			{
+				label: 'Spawn Enemy Pack', fn: () => {
+					for (let i = 0; i < 5; i++) {
+						const id = this.rng.weighted(this.world.biome.enemies)
+						const e = this.world.spawnEnemy(id, p.x + this.rng.range(-60, 60), p.y + this.rng.range(-60, 60))
+						e.aggro = true
+					}
+				},
+			},
+			{
+				label: 'Spawn Elite', fn: () => {
+					const id = this.rng.weighted(this.world.biome.enemies)
+					const e = this.world.spawnEnemy(id, p.x + 50, p.y, { elite: true })
+					e.aggro = true
+				},
+			},
+			{
+				label: 'Kill All Enemies', fn: () => {
+					for (const e of [...this.world.enemies]) {
+						if (!e.dead && e.team === 'enemy') this.combat.killEntity(e)
+					}
+				},
+			},
+			{ label: 'Next Floor', fn: () => { if (this.mode === 'story') { this.loadFloor(this.floor + 1); this.state = 'playing' } } },
+			{ label: 'Previous Floor', fn: () => { if (this.mode === 'story' && this.floor > 1) { this.loadFloor(this.floor - 1); this.state = 'playing' } } },
+			{
+				label: 'Go To Boss Floor', fn: () => {
+					if (this.mode !== 'story') return
+					this.loadFloor(Math.min(FINAL_FLOOR, Math.ceil(this.floor / 3) * 3))
+					this.state = 'playing'
+				},
+			},
+			{
+				label: 'Unlock Everything', fn: () => {
+					this.save.setMax('bossKills', 1)
+					this.save.setMax('floorsReached', 6)
+					this.save.data.endlessUnlocked = true
+					this.save.save()
+					give('All classes + endless unlocked')
+				},
+			},
+			{
+				label: 'Reset Save (!)', fn: () => {
+					localStorage.clear()
+					this.save.load()
+					give('Save wiped')
+				},
+			},
+		]
+	}
+
+	updateDebug() {
+		const input = this.input
+		const actions = this.debugActions()
+		this._menuNav(actions.length)
+		if (input.pressed('cancel') || input.pressed('debug') || input.pressed('pause')) {
+			this.state = 'playing'
+			this.audio.play('ui_back')
+			return
+		}
+		if (input.pressed('confirm')) {
+			this.audio.play('ui_select')
+			actions[this.ui.sel].fn()
+		}
+	}
+
 	toggleFullscreen() {
 		const el = this.canvas.parentElement || this.canvas
 		if (document.fullscreenElement) {
@@ -623,6 +810,12 @@ export class Game {
 			this.camera.prepare()
 			r.beginWorld(this.camera)
 			this.renderWorld(r)
+			r.flush()
+		} else if (this.state === 'editor') {
+			r.clear(0.05, 0.04, 0.08)
+			this.camera.prepare()
+			r.beginWorld(this.camera)
+			this.editor.renderWorld(r)
 			r.flush()
 		} else {
 			r.clear(0.04, 0.03, 0.07)
@@ -858,7 +1051,10 @@ export class Game {
 		let ox = 0
 		let oy = 0
 		if (p.attackAnim > 0 && anims[`${base}_attack`]) {
-			const variant = p.attackVariant === 2 && anims[`${base}_attack2`] ? '_attack2' : '_attack'
+			// combo stages use distinct swing strips where the pack has them
+			let variant = '_attack'
+			if (p.attackVariant === 3) variant = anims[`${base}_attack3`] ? '_attack3' : anims[`${base}_attack2`] ? '_attack2' : '_attack'
+			else if (p.attackVariant === 2) variant = anims[`${base}_attack2`] ? '_attack2' : '_attack'
 			name = base + variant
 			const dur = p.attackAnimDur || 0.3
 			t = Math.min(dur - p.attackAnim, dur - 0.001)
