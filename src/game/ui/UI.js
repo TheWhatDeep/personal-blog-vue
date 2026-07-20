@@ -213,7 +213,7 @@ export class UI {
 
 		// floor / wave label (top, small — the view stays clear)
 		const label = game.mode === 'custom' ? 'CUSTOM MAP — TEST' :
-			game.mode === 'endless' ? `ENDLESS — WAVE ${game.endless.wave}` :
+			game.mode === 'endless' ? `ARENA — WAVE ${game.endless.wave}` :
 			`FLOOR ${game.floor} — ${game.world.biome.name}`
 		r.text(label, vw / 2, 4, COL.dim, 1, 'center')
 
@@ -345,10 +345,9 @@ export class UI {
 		r.textBig('DEPTHS', cx, cy - 54, rgba(180, 120, 255, 255), 2.5, 'center')
 		r.text('a roguelite dungeon crawler', cx, cy - 16, COL.dim, 1, 'center')
 
-		const endlessUnlocked = game.save.data.endlessUnlocked
 		const items = [
-			{ label: 'New Run', enabled: true },
-			{ label: endlessUnlocked ? 'Endless Mode' : 'Endless Mode (defeat the Void Sovereign)', enabled: endlessUnlocked },
+			{ label: 'Arena — Wave Survival', enabled: true },
+			{ label: 'Dungeon Run', enabled: true },
 			{ label: 'Map Editor', enabled: true },
 			{ label: 'Records & Achievements', enabled: true },
 			{ label: 'Settings', enabled: true },
@@ -696,7 +695,7 @@ export class UI {
 		r.textBig('YOU DIED', cx, cy - 64, COL.danger, 2, 'center')
 		const run = game.runSummary || {}
 		const lines = [
-			`Floor reached: ${run.floor ?? 1}`,
+			run.wave != null ? `Wave reached: ${run.wave}` : `Floor reached: ${run.floor ?? 1}`,
 			`Level: ${run.level ?? 1}`,
 			`Enemies slain: ${run.kills ?? 0}`,
 			`Gold collected: ${run.gold ?? 0}`,

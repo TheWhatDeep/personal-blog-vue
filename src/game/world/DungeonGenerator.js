@@ -1,5 +1,5 @@
 import { TileMap, TILE, TILE_SIZE } from './TileMap.js'
-import { biomeForFloor, isBossFloor } from '../data/biomes.js'
+import { BIOMES, biomeForFloor, isBossFloor } from '../data/biomes.js'
 
 /**
  * Procedural dungeon generator.
@@ -32,6 +32,50 @@ export const ROOM_TYPE = {
 export function generateDungeon(floor, rng, endless = false) {
 	if (!endless && isBossFloor(floor)) return generateBossArena(floor, rng)
 	return generateNormalFloor(floor, rng, endless)
+}
+
+/**
+ * Arena mode: one big open room with pillars and a couple of hazard
+ * patches — a clean combat test bed for wave survival.
+ */
+export function generateArenaFloor(rng) {
+	const W = 44
+	const H = 34
+	const map = new TileMap(W, H)
+	const biome = rng.pick(BIOMES) // random look each run
+
+	const room = { x: 3, y: 3, w: W - 6, h: H - 6, type: ROOM_TYPE.BOSS, discovered: true, cleared: false, index: 0 }
+	room.cx = (room.x + room.w / 2) * TILE_SIZE
+	room.cy = (room.y + room.h / 2) * TILE_SIZE
+	carveRect(map, room.x, room.y, room.w, room.h)
+	buildWalls(map)
+
+	// pillars for cover + wall-slam play
+	for (const [px, py] of [[10, 10], [W - 13, 10], [10, H - 13], [W - 13, H - 13], [W >> 1, H >> 1]]) {
+		fillRect(map, px, py, 2, 2, TILE.WALL)
+	}
+	// hazard patches near the corners
+	fillRect(map, 6, H >> 1, 2, 2, TILE.HAZARD)
+	fillRect(map, W - 8, H >> 1, 2, 2, TILE.HAZARD)
+
+	for (let i = 0; i < map.tiles.length; i++) map.variants[i] = rng.chance(0.15) ? 1 : 0
+
+	const spawns = [
+		{ kind: 'torch', x: (room.x + 2) * TILE_SIZE, y: (room.y + 2) * TILE_SIZE },
+		{ kind: 'torch', x: (room.x + room.w - 2) * TILE_SIZE, y: (room.y + 2) * TILE_SIZE },
+	]
+
+	return {
+		map,
+		rooms: [room],
+		corridors: [],
+		spawns,
+		biome,
+		floor: 1,
+		playerStart: { x: room.cx, y: room.cy },
+		isBoss: false,
+		arena: room,
+	}
 }
 
 function generateNormalFloor(floor, rng, endless) {

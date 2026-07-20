@@ -10,7 +10,7 @@ import { Input } from './input/Input.js'
 import { AudioSystem } from './audio/AudioSystem.js'
 import { Player } from './entities/Player.js'
 import { World } from './world/World.js'
-import { generateDungeon } from './world/DungeonGenerator.js'
+import { generateDungeon, generateArenaFloor } from './world/DungeonGenerator.js'
 import { TILE, TILE_SIZE } from './world/TileMap.js'
 import { BIOMES, biomeForFloor, FINAL_FLOOR } from './data/biomes.js'
 import { CLASSES, CLASS_LIST } from './data/classes.js'
@@ -124,6 +124,7 @@ export class Game {
 			this.stats.increment('deaths')
 			this.deathTimer = 1.6
 			this.runSummary = {
+				wave: this.mode === 'endless' ? this.endless.wave : null,
 				floor: this.mode === 'endless' ? this.save.data.highscores.bestFloor : this.floor,
 				level: this.player.level,
 				kills: this.runKills,
@@ -205,12 +206,12 @@ export class Game {
 	}
 
 	_loadEndlessArena() {
-		const dungeon = generateDungeon(FINAL_FLOOR, this.rng, true)
+		const dungeon = generateArenaFloor(this.rng)
 		this.world = new World(this, dungeon)
 		this._placePlayer()
 		this.endless.start()
 		this.audio.setTrack('endless')
-		this.ui.toast('THE ENDLESS DEPTHS', 0xffb06cff)
+		this.ui.toast('THE ARENA — survive the waves!', 0xffb06cff)
 	}
 
 	loadFloor(floor) {
@@ -479,18 +480,15 @@ export class Game {
 			this.audio.play('ui_select')
 			switch (this.ui.sel) {
 				case 0:
-					this.pendingMode = 'story'
+					// Arena wave survival: the combat test bed, open from the start
+					this.pendingMode = 'endless'
 					this.state = 'classSelect'
 					this.ui.sel = 0
 					break
 				case 1:
-					if (this.save.data.endlessUnlocked) {
-						this.pendingMode = 'endless'
-						this.state = 'classSelect'
-						this.ui.sel = 0
-					} else {
-						this.audio.play('error')
-					}
+					this.pendingMode = 'story'
+					this.state = 'classSelect'
+					this.ui.sel = 0
 					break
 				case 2:
 					this.openEditor()
