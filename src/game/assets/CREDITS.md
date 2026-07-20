@@ -16,3 +16,5 @@ are unmodified except for palette tints applied at runtime.
 Everything not present in these packs (spell orbs, skill icons, most item
 icons, particles, fonts, audio) is generated procedurally at load — see
 `../gfx/PixelArt.js` and `../audio/`.
+- **Bold Pixels** font (`BoldPixels.ttf`) from itch.io — UI typeface,
+  rasterized into the texture atlas at its native 8px grid.

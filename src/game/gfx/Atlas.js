@@ -164,42 +164,71 @@ export class Atlas {
 	}
 
 	_packFont() {
-		const ctx = this.ctx
-		const cellW = 8
-		const cellH = 10
-		ctx.font = 'bold 8px monospace'
-		ctx.textBaseline = 'top'
-		ctx.fillStyle = '#ffffff'
+		this.bakeFont('bold 8px monospace', 10, 8)
+	}
+
+	/**
+	 * Rasterize a font into fresh atlas slots and make it the active UI font.
+	 *
+	 * Each glyph is drawn on a private oversized canvas, thresholded to
+	 * opaque white / transparent, ink-cropped horizontally and copied into
+	 * its own atlas slot. Measuring the actual ink (instead of trusting
+	 * measureText) matters: pixel-font TTFs often report advances narrower
+	 * than their ink, which would crop glyphs and bleed into neighbors.
+	 * Can be re-run (e.g. with a loaded @font-face) — text uses whatever
+	 * was baked last.
+	 * @param {string} cssFont e.g. '8px BoldPixels'
+	 * @param {number} lineHeight nominal line height in px
+	 * @param {number} baseline distance from cell top to text baseline
+	 */
+	bakeFont(cssFont, lineHeight, baseline) {
+		const cellH = lineHeight + 2 // 2px descender slack
+		const tmp = document.createElement('canvas')
+		tmp.width = 48
+		tmp.height = cellH + 8
+		const tc = tmp.getContext('2d', { willReadFrequently: true })
 
 		const glyphs = {}
 		for (let code = 33; code <= 126; code++) {
 			const ch = String.fromCharCode(code)
-			const slot = this._alloc(cellW, cellH)
-			ctx.fillText(ch, slot.x + 1, slot.y + 1)
-			glyphs[code] = {
-				region: this._region(slot.x, slot.y, cellW - 1, cellH),
-				advance: 6,
-			}
-		}
+			tc.clearRect(0, 0, tmp.width, tmp.height)
+			tc.font = cssFont
+			tc.textBaseline = 'alphabetic'
+			tc.fillStyle = '#ffffff'
+			tc.fillText(ch, 8, baseline) // generous left margin for overhangs
 
-		// Threshold alpha + force white so text renders crisp and tintable
-		const img = ctx.getImageData(0, 0, ATLAS_SIZE, ATLAS_SIZE)
-		const d = img.data
-		for (let i = 0; i < d.length; i += 4) {
-			const a = d[i + 3]
-			if (a > 0 && a < 255) {
-				if (a >= 90) {
-					d[i + 3] = 255
-					// only whiten thresholded (font) pixels: sprites are drawn opaque
-					d[i] = d[i + 1] = d[i + 2] = 255
-				} else {
-					d[i + 3] = 0
+			// threshold + find horizontal ink bounds within the cell rows
+			const img = tc.getImageData(0, 0, tmp.width, cellH)
+			const d = img.data
+			let minX = tmp.width
+			let maxX = -1
+			for (let y = 0; y < cellH; y++) {
+				for (let x = 0; x < tmp.width; x++) {
+					const i = (y * tmp.width + x) * 4
+					if (d[i + 3] >= 90) {
+						d[i] = d[i + 1] = d[i + 2] = 255
+						d[i + 3] = 255
+						if (x < minX) minX = x
+						if (x > maxX) maxX = x
+					} else {
+						d[i + 3] = 0
+					}
 				}
 			}
-		}
-		ctx.putImageData(img, 0, 0)
+			if (maxX < minX) continue // no ink — treated as a space at draw time
 
-		this.font = { glyphs, lineHeight: 10, spaceWidth: 6 }
+			const w = maxX - minX + 1
+			const slot = this._alloc(w, cellH)
+			// putImageData replaces pixels outright, so stale atlas content
+			// under the slot cannot bleed through
+			this.ctx.putImageData(img, slot.x - minX, slot.y, minX, 0, w, cellH)
+			glyphs[code] = {
+				region: this._region(slot.x, slot.y, w, cellH),
+				advance: w + 1,
+			}
+		}
+
+		this.font = { glyphs, lineHeight, spaceWidth: 4, css: cssFont }
 	}
 }
 

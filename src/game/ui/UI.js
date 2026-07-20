@@ -283,9 +283,9 @@ export class UI {
 			r.rect(x, y, 2, 2, rgba(120, 100, 200, 60))
 		}
 
-		r.text('DUNGEON', cx, cy - 76, rgba(232, 181, 58, 255), 4, 'center')
-		r.text('DEPTHS', cx, cy - 44, rgba(180, 120, 255, 255), 4, 'center')
-		r.text('a roguelite dungeon crawler', cx, cy - 16, COL.dim, 1, 'center')
+		r.text('DUNGEON', cx, cy - 90, rgba(232, 181, 58, 255), 3, 'center')
+		r.text('DEPTHS', cx, cy - 54, rgba(180, 120, 255, 255), 3, 'center')
+		r.text('a roguelite dungeon crawler', cx, cy - 14, COL.dim, 1, 'center')
 
 		const endlessUnlocked = game.save.data.endlessUnlocked
 		const items = [
@@ -294,10 +294,10 @@ export class UI {
 			{ label: 'Records & Achievements', enabled: true },
 			{ label: 'Settings', enabled: true },
 		]
-		this.drawMenuList(r, items, cx, cy + 4, this.sel)
+		this.drawMenuList(r, items, cx, cy + 8, this.sel)
 
-		r.text('WASD move · SPACE attack · SHIFT dodge · 1-4 skills · E interact', cx, r.viewH - 22, COL.dim, 1, 'center')
-		r.text('F fullscreen · gamepad supported', cx, r.viewH - 12, COL.dim, 1, 'center')
+		r.text('WASD move · SPACE attack · SHIFT dodge · 1-4 skills · E interact', cx, r.viewH - 26, COL.dim, 1, 'center')
+		r.text('F fullscreen · gamepad supported', cx, r.viewH - 13, COL.dim, 1, 'center')
 	}
 
 	drawMenuList(r, items, cx, y, sel) {
@@ -464,10 +464,13 @@ export class UI {
 		const cx = r.viewW / 2
 
 		const tabs = ['EQUIPMENT', 'CHARACTER', 'SKILLS']
-		let tx = cx - 90
+		// measured layout so tab labels never collide regardless of font
+		const gap = 14
+		const total = tabs.reduce((w, t) => w + r.measureText(t) + gap, -gap)
+		let tx = cx - total / 2
 		tabs.forEach((t, i) => {
 			r.text(t, tx, 6, i === this.tab ? COL.sel : COL.dim)
-			tx += 70
+			tx += r.measureText(t) + gap
 		})
 		r.text('Q/E or L/R switch tabs', cx, r.viewH - 12, COL.dim, 1, 'center')
 
@@ -547,11 +550,11 @@ export class UI {
 			['vit', 'Vitality', 'health + defense'],
 		]
 		attrs.forEach(([key, label, hint], i) => {
-			const y = 50 + i * 20
+			const y = 48 + i * 22
 			const selected = this.sel === i
 			r.text(`${selected ? '>' : ' '}${label}`, cx - 116, y, selected ? COL.sel : COL.text)
 			r.text(`${p.attributes[key]}`, cx - 30, y, COL.gold)
-			r.text(hint, cx - 116, y + 9, COL.dim)
+			r.text(hint, cx - 112, y + 11, COL.dim)
 		})
 
 		this.panel(r, cx + 4, 20, 116, 120, 'STATS')

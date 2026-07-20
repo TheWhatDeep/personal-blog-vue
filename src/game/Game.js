@@ -835,10 +835,31 @@ export class Game {
 		// i-frame blink
 		if (p.iframes > 0 && p.rollTime <= 0 && Math.floor(p.iframes * 14) % 2 === 0) return
 		this._shadow(r, p.x, p.y + 5, 10)
-		const bob = p.moving ? Math.sin(p.animT) * 1.2 : 0
-		const rot = p.rollTime > 0 ? (0.26 - p.rollTime) / 0.26 * Math.PI * 2 * (p.rollDirX >= 0 ? 1 : -1) : 0
+
+		// walking: bob + tilt wobble (the pack has idle frames only, so
+		// body motion is what sells movement)
+		const bob = p.moving ? Math.sin(p.walkT * 13) * 1.3 : 0
+		let rot = 0
+		if (p.rollTime > 0) {
+			rot = ((0.26 - p.rollTime) / 0.26) * Math.PI * 2 * (p.rollDirX >= 0 ? 1 : -1)
+		} else if (p.moving) {
+			rot = Math.sin(p.walkT * 13) * 0.09
+		}
+
+		// attack lunge: quick step toward the aim direction with a size pop
+		let ox = 0
+		let oy = 0
+		let scale = 1
+		if (p.attackAnim > 0) {
+			const k = p.attackAnim / 0.18
+			ox = p.facingX * 3.5 * k
+			oy = p.facingY * 3.5 * k
+			scale = 1 + 0.12 * k
+			rot += p.facingX * 0.12 * k
+		}
+
 		const tint = p.flash > 0 ? rgba(255, 90, 90, 255) : 0xffffffff
-		r.animSprite(p.classDef.sprite, p.animT * 0.4, p.x, p.y - 3 + bob, tint, rot, p.facingX < 0, 1, p.moving ? 10 : 4)
+		r.animSprite(p.classDef.sprite, p.animT, p.x + ox, p.y - 3 + bob + oy, tint, rot, p.facingX < 0, scale, p.moving ? 7 : 4)
 		// shield bubble
 		if (p.shieldHp > 0) {
 			r.circleOutline(p.x, p.y - 2, 11 + Math.sin(this.ui.menuT * 6), withAlpha(rgba(220, 210, 160, 255), 0.6))
@@ -849,18 +870,27 @@ export class Game {
 		this._shadow(r, e.x, e.y + e.r - 1, e.r * 1.6)
 		const def = e.def
 		const sprite = e.spriteOverride ?? (e.kind === 'boss' ? e.bossDef.sprite : def.sprite)
-		let bob = Math.sin(e.animT) * 1.2
-		if (def.flying) bob = Math.sin(e.animT * 1.5) * 3
-		if (def.hopper) bob = -Math.abs(Math.sin(e.animT)) * 3
+		const isMoving = Math.abs(e.vx) + Math.abs(e.vy) > 2
+		let bob = isMoving ? Math.sin(e.animT * 11) * 1.2 : 0
+		if (def.flying) bob = Math.sin(e.animT * 9) * 3
+		if (def.hopper) bob = -Math.abs(Math.sin(e.animT * 6)) * 3
+		let rot = isMoving && !def.flying ? Math.sin(e.animT * 11) * 0.07 : 0
 		let scale = e.scale
-		if (e.kind === 'boss') scale = 1 + Math.sin(e.animT * 0.7) * 0.03
-		if (e.state === 'attack') scale *= 1.08
+		if (e.kind === 'boss') scale = e.scale * (1 + Math.sin(e.animT * 3) * 0.03)
+
+		// attack pose: lean into the strike and pop slightly
+		let lean = 0
+		if (e.state === 'attack') {
+			scale *= 1.1
+			lean = e.facing * 2
+			rot += e.facing * 0.1
+		}
 
 		let tint = e.tint
 		if (e.flash > 0) tint = rgba(255, 80, 80, 255)
 		else if (e.team === 'player') tint = rgba(140, 220, 255, 255)
 
-		r.animSprite(sprite, e.animT * 0.6, e.x, e.y - e.r * 0.5 + bob, tint, 0, e.facing < 0, scale)
+		r.animSprite(sprite, e.animT, e.x + lean, e.y - e.r * 0.5 + bob, tint, rot, e.facing < 0, scale, e.kind === 'boss' ? 7 : 5)
 
 		// mini health bar when damaged (bosses use the big UI bar)
 		if (e.kind !== 'boss' && e.hp < e.maxHp && e.team === 'enemy') {

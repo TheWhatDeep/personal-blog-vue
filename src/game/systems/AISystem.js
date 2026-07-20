@@ -24,7 +24,7 @@ export class AISystem {
 			if (e.dead) continue
 			if (e.kind === 'boss') continue // bosses are driven by the BossManager
 
-			e.animT += dt * 8
+			e.animT += dt // seconds clock; draw code derives frame/bob rates
 			e.flash = Math.max(0, e.flash - dt)
 			e.stateTime += dt
 			e.attackTimer = Math.max(0, e.attackTimer - dt)
