@@ -232,6 +232,10 @@ export class Game {
 		const p = this.player
 		p.x = this.world.playerStart.x
 		p.y = this.world.playerStart.y
+		// never spawn inside a solid tile (editor maps, decorated spawn rooms)
+		const fixed = this.world.map.depenetrate(p.x, p.y, p.r)
+		p.x = fixed.x
+		p.y = fixed.y
 		p.kbx = p.kby = 0
 		p.summons = []
 		this.camera.snapTo(p.x, p.y)
@@ -1127,6 +1131,18 @@ export class Game {
 		let tint = e.tint
 		if (e.flash > 0) tint = rgba(255, 80, 80, 255)
 		else if (e.team === 'player') tint = rgba(140, 220, 255, 255)
+		else if (e.affix === 'frenzied' && e.hp < e.maxHp * 0.5 && Math.floor(e.animT * 6) % 2 === 0) {
+			tint = rgba(255, 70, 70, 255) // enraged pulse
+		}
+
+		// warded elites: golden bubble while projectile-immune
+		if (e.affix === 'warded' && e.wardUp) {
+			r.circleOutline(e.x, e.y - e.r * 0.5, e.r + 6 + Math.sin(e.animT * 5), rgba(230, 190, 90, 200), 1, 16)
+		}
+		// shielded enemies: small guard indicator until broken
+		if (e.def.shield && (e.guardBreakT ?? 0) <= 0) {
+			r.rect(e.x - e.facing * (e.r + 3) - 1, e.y - e.r * 0.5 - 3, 2, 7, rgba(207, 216, 227, 220))
+		}
 
 		// attack telegraph: red pulse + "!" during the wind-up
 		if ((e.attackWindup ?? 0) > 0) {

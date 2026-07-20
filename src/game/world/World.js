@@ -283,9 +283,16 @@ export class World {
 					if ((e.x - p.x) ** 2 + (e.y - p.y) ** 2 < rr * rr) target = e
 				})
 				if (target) {
-					game.combat.damageEntity(target, p.damage, { crit: p.crit, status: p.status, knockback: 60, kx: p.vx, ky: p.vy })
-					if (p.pierce > 0) p.pierce--
-					else hit = true
+					if (target.affix === 'warded' && target.wardUp) {
+						// warded elites shrug off projectiles while the bubble is up
+						game.particles.burst({ x: p.x, y: p.y, count: 6, color: 0xffd2a44a, speed: 50, life: 0.3 })
+						game.audio.play('skill_shield', 0.4)
+						hit = true
+					} else {
+						game.combat.damageEntity(target, p.damage, { crit: p.crit, status: p.status, knockback: 60, kx: p.vx, ky: p.vy })
+						if (p.pierce > 0) p.pierce--
+						else hit = true
+					}
 				}
 				// vs breakable props
 				if (!hit) {

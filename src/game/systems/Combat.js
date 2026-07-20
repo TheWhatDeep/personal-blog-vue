@@ -148,6 +148,31 @@ export class Combat {
 	damageEntity(e, amount, opts = {}) {
 		if (e.dead) return
 		const game = this.game
+
+		// shielded enemies block frontal hits until their guard breaks;
+		// AoE/slams (no hit direction) and rear hits go through
+		if (e.def?.shield && !opts.isDot && (e.guardBreakT ?? 0) <= 0 && e.state !== 'flinch') {
+			const len = Math.hypot(opts.kx ?? 0, opts.ky ?? 0)
+			if (len > 0.01) {
+				const facingAttacker = e.facing * ((opts.kx ?? 0) / len) < 0.15
+				if (facingAttacker) {
+					e.guardMeter = (e.guardMeter ?? 0) + amount
+					game.audio.play('skill_shield', 0.6)
+					game.particles.burst({ x: e.x - e.facing * 6, y: e.y, count: 5, color: [0xffe3d8cf, 0xffb1a59a], speed: 60, life: 0.25 })
+					game.world.floatText(e.x, e.y - e.r - 4, 'BLOCK', 0xffcfd8e3, 0.9)
+					if (e.guardMeter >= (e.def.guardBreak ?? 30)) {
+						e.guardMeter = 0
+						e.guardBreakT = 2.5
+						e.state = 'flinch'
+						e.stateTime = 0
+						game.world.floatText(e.x, e.y - e.r - 12, 'GUARD BREAK!', 0xff3ad2ff, 1.1)
+						game.audio.play('crit')
+					}
+					return
+				}
+			}
+		}
+
 		const mods = game.statusFx.modifiers(e)
 		let dmg = Math.max(1, Math.round(amount * mods.damageTakenMul))
 
@@ -249,6 +274,31 @@ export class Combat {
 			this.explode(e.x, e.y, e.def.blastRadius, e.damage, 'enemy')
 		}
 
+		// volatile elites leave a short-fused blast — telegraphed, dodgeable
+		if (e.affix === 'volatile' && !e.exploded) {
+			e.exploded = true
+			const bx = e.x
+			const by = e.y
+			game.world.addTelegraph({
+				x: bx, y: by, r: 38, dur: 0.55, color: 0x30008aff,
+				onDone: (g) => g.combat.explode(bx, by, 38, Math.round(e.damage * 1.3), 'enemy'),
+			})
+		}
+
+		// slimes split into two smaller slimes
+		if (e.def.split && !e.noSplit && e.team === 'enemy') {
+			for (let i = 0; i < e.def.split.count; i++) {
+				const s = game.world.spawnEnemy(e.def.id, e.x + (i === 0 ? -8 : 8), e.y + 4, {
+					noSplit: true,
+					scale: e.def.split.scale,
+					hpMul: e.def.split.hpMul,
+					xpMul: 0.3,
+				})
+				s.aggro = true
+				s.r = Math.max(3, s.r * e.def.split.scale)
+			}
+		}
+
 		if (e.team === 'enemy') {
 			game.player.addXp(e.xp, game)
 			game.stats.increment('kills')
@@ -305,6 +355,13 @@ export class Combat {
 		// thorns reflect to the attacker
 		if (opts.source && player.thorns > 0 && !opts.source.dead) {
 			this.damageEntity(opts.source, player.thorns, { noKnockback: true, isDot: true, dotColor: 0xff8a8a8a })
+		}
+
+		// vampiric elites feast on landed hits
+		if (opts.source && opts.source.affix === 'vampiric' && !opts.source.dead) {
+			const s = opts.source
+			s.hp = Math.min(s.maxHp, s.hp + dmg * 1.5)
+			game.particles.burst({ x: s.x, y: s.y - 4, count: 6, color: 0xffb04ad2, speed: 30, life: 0.5, gravity: -40 })
 		}
 
 		game.world.floatText(player.x, player.y - 10, String(dmg), 0xff4444ff, 1.1)

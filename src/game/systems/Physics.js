@@ -51,8 +51,13 @@ export class Physics {
 		this._hazardTiles(dt)
 	}
 
-	/** Push overlapping enemies apart so packs don't collapse into one point. */
+	/**
+	 * Push overlapping enemies apart so packs don't collapse into one point.
+	 * Pushes are wall-checked — an unchecked shove is exactly how crowded
+	 * packs used to squeeze entities into solid tiles.
+	 */
 	_separate(world) {
+		const map = world.map
 		for (const e of world.enemies) {
 			if (e.dead) continue
 			world.grid.query(e.x, e.y, e.r + 10, (other) => {
@@ -66,12 +71,37 @@ export class Physics {
 					const push = ((minD - d) / d) * 0.5
 					const px = dx * push
 					const py = dy * push
-					other.x += px
-					other.y += py
-					e.x -= px
-					e.y -= py
+					if (!map._circleHits(other.x + px, other.y + py, other.r)) {
+						other.x += px
+						other.y += py
+					}
+					if (!map._circleHits(e.x - px, e.y - py, e.r)) {
+						e.x -= px
+						e.y -= py
+					}
 				}
 			})
+		}
+
+		// depenetration safety net: eject anything that still ended up inside
+		// a solid tile (bad spawn, teleport, old saves)
+		for (const e of world.enemies) {
+			if (e.dead) continue
+			const fixed = map.depenetrate(e.x, e.y, e.r)
+			if (fixed.moved) {
+				e.x = fixed.x
+				e.y = fixed.y
+				e.kbx = 0
+				e.kby = 0
+			}
+		}
+		const p = this.game.player
+		if (p && !p.dead) {
+			const fixed = map.depenetrate(p.x, p.y, p.r)
+			if (fixed.moved) {
+				p.x = fixed.x
+				p.y = fixed.y
+			}
 		}
 	}
 

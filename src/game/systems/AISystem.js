@@ -46,6 +46,16 @@ export class AISystem {
 				continue
 			}
 
+			// affix bookkeeping
+			e.guardBreakT = Math.max(0, (e.guardBreakT ?? 0) - dt)
+			if (e.affix === 'warded') {
+				e.wardCycle += dt
+				e.wardUp = (e.wardCycle % 5) < 3 // 3s bubble, 2s vulnerable
+			}
+			if (e.affix === 'frenzied' && e.hp < e.maxHp * 0.5) {
+				mods.speedMul *= 1.45 // enrages below half health
+			}
+
 			const target = this._pickTarget(e)
 			this._runState(e, target, mods, dt)
 
@@ -240,6 +250,44 @@ export class AISystem {
 				break
 			}
 
+			case 'lancer': {
+				// line up a long charge from range
+				if (d <= def.attackRange && d > 40 && e.attackTimer <= 0) {
+					e.dashX = Math.cos(a)
+					e.dashY = Math.sin(a)
+					// line telegraph so the lane is readable
+					game.world.addTelegraph({
+						shape: 'line',
+						x: e.x, y: e.y,
+						x2: e.x + e.dashX * (d + 50), y2: e.y + e.dashY * (d + 50),
+						width: e.r * 2, dur: def.chargeTelegraph, color: 0x300000ff,
+					})
+					this._setState(e, 'attack')
+				} else {
+					// approach slowly, keeping the lance leveled
+					e.vx = Math.cos(a) * speed * (d < 60 ? -0.6 : 0.7)
+					e.vy = Math.sin(a) * speed * (d < 60 ? -0.6 : 0.7)
+				}
+				break
+			}
+
+			case 'rider': {
+				// fast orbit at radius, then dive through
+				e.orbitDir = e.orbitDir || (Math.random() < 0.5 ? 1 : -1)
+				if (e.attackTimer <= 0 && Math.abs(d - def.orbitRadius) < 35) {
+					e.dashX = Math.cos(a)
+					e.dashY = Math.sin(a)
+					this._setState(e, 'attack')
+					break
+				}
+				const orbitA = a + (Math.PI / 2) * e.orbitDir
+				const inOut = d > def.orbitRadius + 10 ? 0.8 : d < def.orbitRadius - 10 ? -0.5 : 0
+				e.vx = (Math.cos(orbitA) + Math.cos(a) * inOut) * speed
+				e.vy = (Math.sin(orbitA) + Math.sin(a) * inOut) * speed
+				if (Math.random() < 0.008) e.orbitDir *= -1
+				break
+			}
+
 			default: {
 				// melee + tank: straight pursuit
 				e.vx = Math.cos(a) * speed
@@ -257,7 +305,7 @@ export class AISystem {
 		const a = angleTo(e.x, e.y, target.x, target.y)
 
 		// expose the wind-up so the renderer can telegraph the strike
-		const WINDUPS = { ranged: 0.35, summoner: 0.6, assassin: 0.35, tank: 0.6, flyer: 0.1, bomber: 0 }
+		const WINDUPS = { ranged: 0.35, summoner: 0.6, assassin: 0.35, tank: 0.6, flyer: 0.1, bomber: 0, lancer: 0.75, rider: 0.25 }
 		const windup = WINDUPS[def.ai] ?? 0.25
 		e.attackWindup = Math.max(0, windup - e.stateTime)
 
@@ -361,6 +409,47 @@ export class AISystem {
 				if (e.stateTime < 0.5) {
 					e.vx = e.dashX * def.swoopSpeed
 					e.vy = e.dashY * def.swoopSpeed
+				} else {
+					e.attackTimer = def.attackCd
+					this._setState(e, 'recover')
+				}
+				break
+			}
+
+			case 'lancer': {
+				// braced wind-up, then a long committed charge down the lane
+				const T = def.chargeTelegraph
+				if (e.stateTime < T) {
+					e.vx = 0
+					e.vy = 0
+				} else if (e.stateTime < T + 0.6) {
+					e.vx = e.dashX * def.chargeSpeed
+					e.vy = e.dashY * def.chargeSpeed
+					if (e.team === 'enemy' && !target.dead && dist(e.x, e.y, target.x, target.y) < e.r + target.r + 3 && e.touchTimer <= 0) {
+						e.touchTimer = 1.0
+						game.combat.damagePlayer(e.damage, { kx: e.dashX, ky: e.dashY, source: e })
+					}
+				} else {
+					e.attackTimer = def.attackCd
+					this._setState(e, 'recover')
+				}
+				break
+			}
+
+			case 'rider': {
+				// short aim, then dive through the target at speed
+				if (e.stateTime < 0.25) {
+					e.vx = 0
+					e.vy = 0
+					e.dashX = Math.cos(a)
+					e.dashY = Math.sin(a)
+				} else if (e.stateTime < 0.65) {
+					e.vx = e.dashX * def.diveSpeed
+					e.vy = e.dashY * def.diveSpeed
+					if (e.team === 'enemy' && !target.dead && dist(e.x, e.y, target.x, target.y) < e.r + target.r + 3 && e.touchTimer <= 0) {
+						e.touchTimer = 1.0
+						game.combat.damagePlayer(e.damage, { kx: e.dashX, ky: e.dashY, source: e })
+					}
 				} else {
 					e.attackTimer = def.attackCd
 					this._setState(e, 'recover')

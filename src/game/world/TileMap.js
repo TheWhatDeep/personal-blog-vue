@@ -88,6 +88,25 @@ export class TileMap {
 		return false
 	}
 
+	/**
+	 * If the circle overlaps solid tiles, find the nearest free position by
+	 * spiraling outward. Safety net for anything that ends up inside a wall
+	 * (bad spawn point, crowd push, teleport) — without it, moveCircle
+	 * rejects every move and the entity is stuck forever.
+	 */
+	depenetrate(x, y, r) {
+		if (!this._circleHits(x, y, r)) return { x, y, moved: false }
+		for (let dist = 4; dist <= 96; dist += 4) {
+			for (let i = 0; i < 12; i++) {
+				const a = (i / 12) * Math.PI * 2
+				const nx = x + Math.cos(a) * dist
+				const ny = y + Math.sin(a) * dist
+				if (!this._circleHits(nx, ny, r)) return { x: nx, y: ny, moved: true }
+			}
+		}
+		return { x, y, moved: false }
+	}
+
 	/** line-of-sight check between two world points (for AI + ranged attacks) */
 	lineOfSight(x0, y0, x1, y1) {
 		const dx = x1 - x0

@@ -138,7 +138,8 @@ export class EndlessMode {
 			const a = Math.random() * TAU
 			const x = player.x + Math.cos(a) * radius
 			const y = player.y + Math.sin(a) * radius
-			if (!world.map.isSolidAt(x, y)) return { x, y }
+			// radius-aware so nothing spawns half-embedded in a wall
+			if (!world.map._circleHits(x, y, 9)) return { x, y }
 		}
 		// fallback: room center
 		const room = world.rooms[Math.floor(Math.random() * world.rooms.length)]

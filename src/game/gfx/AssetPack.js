@@ -290,6 +290,9 @@ export function applyAssetPack(atlas, imgs) {
 	rpgChar('bat', 'bat')
 	rpgChar('bat_frost', 'bat', { tint: '#a8d8ff' })
 	rpgChar('shop_npc', 'soldier')
+	rpgChar('lancer', 'lancer')
+	rpgChar('rider', 'orcrider')
+	rpgChar('shield_skeleton', 'armoredskel')
 	char('wisp', 0, 1) // Pixel Poem blue flame still fits the void wisp
 
 	// ---- bosses: Tiny RPG characters at crisp 2x, tinted per biome -------------------
