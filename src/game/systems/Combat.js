@@ -36,15 +36,14 @@ export class Combat {
 		player.attackVariant = 1
 
 		if (weapon.type === 'melee') {
-			// combo: consecutive swings ramp damage; the third hits harder
+			// 3-hit combo chain: each stage plays a different swing animation
+			// and ramps damage; the third stage is the heavy finisher
 			player.comboTimer = 1.0
 			player.comboCount = Math.min(3, player.comboCount + 1)
+			player.attackVariant = player.comboCount
 			const comboMul = 1 + 0.22 * (player.comboCount - 1)
 			const finisher = player.comboCount === 3
-			if (finisher) {
-				player.comboCount = 0
-				player.attackVariant = 2 // combo finisher uses the big swing strip
-			}
+			if (finisher) player.comboCount = 0
 
 			const crit = this.rollCrit()
 			const dmg = Math.round(player.attackDamage * comboMul * (crit ? player.critMult : 1))
@@ -225,7 +224,7 @@ export class Combat {
 	damagePlayer(amount, opts = {}) {
 		const game = this.game
 		const player = game.player
-		if (player.dead) return
+		if (player.dead || game.godMode) return
 		if (!opts.isDot && (player.iframes > 0 || player.rollTime > 0)) return
 
 		// shield buffs absorb first

@@ -82,6 +82,7 @@ export class UI {
 			case 'settings': this.drawSettings(r); break
 			case 'stats': this.drawStats(r); break
 			case 'shop': this.drawHUD(r); this.drawShop(r); break
+			case 'debug': this.drawHUD(r); this.drawDebug(r); break
 			case 'dead': this.drawDeath(r); break
 			case 'victory': this.drawVictory(r); break
 		}
@@ -105,103 +106,146 @@ export class UI {
 		r.rectOutline(x, y, w, h, COL.border)
 	}
 
-	// ---- HUD -------------------------------------------------------------------
+	// ---- HUD (Diablo-style: orbs in the corners, skill belt at the bottom) ------
+
+	/** Liquid-filled orb: dark glass sphere filling from the bottom. */
+	orb(r, cx, cy, radius, frac, color, darkColor) {
+		r.circleFill(cx, cy, radius, rgba(12, 10, 18, 220))
+		const level = cy + radius - Math.min(1, Math.max(0, frac)) * 2 * radius
+		const step = 2
+		for (let y = -radius; y < radius; y += step) {
+			const sy = cy + y
+			if (sy + step < level) continue
+			const half = Math.sqrt(Math.max(0, radius * radius - y * y))
+			// slightly darker liquid near the bottom for depth
+			r.rect(cx - half, Math.max(sy, level), half * 2, step - (Math.max(sy, level) - sy), y > radius * 0.3 ? darkColor : color)
+		}
+		// glass shine + rim
+		r.rect(cx - radius * 0.45, cy - radius * 0.65, radius * 0.35, 2, rgba(255, 255, 255, 60))
+		r.circleOutline(cx, cy, radius, COL.border, 1, 28)
+	}
 
 	drawHUD(r) {
 		const game = this.game
 		const p = game.player
 		if (!p) return
 		const vw = r.viewW
+		const vh = r.viewH
 
-		// health / mana / xp
-		this.bar(r, 8, 8, 90, 9, p.hp / p.maxHp, COL.hp, COL.hpBack)
-		r.text(`${Math.ceil(p.hp)}/${p.maxHp}`, 53, 9, COL.text, 1, 'center')
-		if (p.shieldHp > 0) {
-			this.bar(r, 8, 8, 90, 3, Math.min(1, p.shieldHp / p.maxHp), COL.shield, COL.hpBack)
-		}
-		this.bar(r, 8, 19, 74, 7, p.mana / p.maxMana, COL.mana, COL.manaBack)
-		this.bar(r, 8, 28, 74, 4, p.xp / p.xpNext, COL.xp, rgba(24, 40, 18, 255))
-		r.text(`Lv${p.level}`, 86, 19, COL.text)
-
-		// gold + potions
-		r.sprite('coin', 14, 42)
-		r.text(`${p.gold}`, 22, 38, COL.gold)
-		r.sprite('potion_red', 60, 42)
-		r.text(`x${p.potions.hp}`, 68, 38, p.potions.hp > 0 ? COL.text : COL.dim)
-		r.sprite('potion_blue', 92, 42)
-		r.text(`x${p.potions.mp}`, 100, 38, p.potions.mp > 0 ? COL.text : COL.dim)
-
-		// attribute/skill point reminder
-		if (p.attrPoints > 0 || p.skillPoints > 0) {
-			const pulse = Math.sin(this.menuT * 5) > 0
-			if (pulse) r.text('[TAB] points to spend!', 8, 52, COL.sel)
-		}
-
-		this.drawSkillSlots(r, p)
 		this.drawMinimap(r)
 		this.drawBossBar(r)
 
-		// floor / wave label
-		const label = game.mode === 'endless'
-			? `ENDLESS — WAVE ${game.endless.wave}`
-			: `FLOOR ${game.floor} — ${game.world.biome.name}`
-		r.text(label, vw / 2, 4, COL.dim, 1, 'center')
+		// ---- bottom belt ----
+		const orbR = 19
+		const beltY = vh - 26
 
-		// interact prompt
-		if (game.interactPrompt) {
-			r.text(`[E] ${game.interactPrompt}`, vw / 2, r.viewH - 46, COL.sel, 1, 'center')
+		// health orb (left) + mana orb (right)
+		this.orb(r, 26, vh - 26, orbR, p.hp / p.maxHp, COL.hp, rgba(140, 30, 30, 255))
+		r.text(`${Math.ceil(p.hp)}`, 26, vh - 30, COL.text, 1, 'center')
+		r.text(`LV${p.level}`, 26, vh - 50, COL.gold, 1, 'center')
+		if (p.shieldHp > 0) {
+			r.circleOutline(26, vh - 26, orbR + 2, withAlpha(COL.shield, 0.8), 1, 28)
 		}
+		this.orb(r, vw - 26, vh - 26, orbR, p.mana / p.maxMana, COL.mana, rgba(24, 50, 140, 255))
+		r.text(`${Math.ceil(p.mana)}`, vw - 26, vh - 30, COL.text, 1, 'center')
 
-		// combo indicator
-		if (p.comboCount > 1 && p.comboTimer > 0) {
-			r.text(`COMBO x${p.comboCount}`, vw / 2, r.viewH - 60, COL.gold, 1, 'center')
-		}
-
-		// hurt vignette + low hp warning
-		if (this.hurtFlash > 0) {
-			r.rect(0, 0, vw, r.viewH, withAlpha(rgba(255, 40, 40, 90), this.hurtFlash * 2))
-		}
-		if (p.hp / p.maxHp < 0.25 && !p.dead) {
-			const a = 0.25 + 0.2 * Math.sin(this.menuT * 6)
-			r.rectOutline(1, 1, vw - 2, r.viewH - 2, withAlpha(COL.danger, a), 2)
-		}
-		// chrono (time-slow) tint
-		if (this.chronoT > 0) {
-			r.rect(0, 0, vw, r.viewH, rgba(180, 60, 200, 26))
-		}
-
-		// boss banner
-		if (this.banner) {
-			const a = Math.min(1, this.banner.t)
-			r.textBig(this.banner.text, vw / 2, r.viewH * 0.3, withAlpha(rgba(255, 80, 80, 255), a), 1.5, 'center')
-		}
-	}
-
-	drawSkillSlots(r, p) {
-		const game = this.game
-		const n = p.skills.length
+		// skill belt + potions, centered
 		const size = 18
-		const totalW = n * (size + 4)
-		let x = (r.viewW - totalW) / 2
-		const y = r.viewH - 26
+		const slots = p.skills.length + 2
+		const totalW = slots * (size + 4) + 8
+		let x = (vw - totalW) / 2
+		const y = beltY - size / 2
+		r.rect(x - 6, y - 4, totalW + 12, size + 10, rgba(12, 10, 18, 200))
+		r.rectOutline(x - 6, y - 4, totalW + 12, size + 10, COL.border)
 
-		for (let i = 0; i < n; i++) {
+		for (let i = 0; i < p.skills.length; i++) {
 			const slot = p.skills[i]
 			const def = SKILLS[slot.id]
 			r.rect(x, y, size, size, COL.panel)
 			r.rectOutline(x, y, size, size, COL.border)
 			r.sprite(def.icon, x + size / 2, y + size / 2)
-			// cooldown sweep
 			if (slot.cd > 0) {
 				const maxCd = skillCooldown(def, slot.level) * (1 - p.cdr)
 				const frac = slot.cd / maxCd
-				r.rect(x, y + size * (1 - frac), size, size * frac, rgba(0, 0, 0, 160))
+				r.rect(x, y + size * (1 - frac), size, size * frac, rgba(0, 0, 0, 170))
 				r.text(slot.cd.toFixed(0), x + size / 2, y + 5, COL.text, 1, 'center')
 			} else if (p.mana < def.mana) {
-				r.rect(x, y, size, size, rgba(20, 30, 80, 140))
+				r.rect(x, y, size, size, rgba(20, 30, 80, 150))
 			}
-			r.text(`${i + 1}`, x + 2, y + size - 8, COL.dim)
+			r.text(`${i + 1}`, x + 2, y + size - 7, COL.dim)
 			x += size + 4
+		}
+		// potion slots
+		x += 8
+		for (const [icon, key, count] of [['potion_red', 'Q', p.potions.hp], ['potion_blue', 'R', p.potions.mp]]) {
+			r.rect(x, y, size, size, COL.panel)
+			r.rectOutline(x, y, size, size, COL.border)
+			r.sprite(icon, x + size / 2, y + size / 2 - 1, count > 0 ? 0xffffffff : rgba(90, 90, 90, 255))
+			r.text(`${count}`, x + size - 4, y + size - 7, count > 0 ? COL.text : COL.dim, 1, 'center')
+			r.text(key, x + 2, y + size - 7, COL.dim)
+			x += size + 4
+		}
+
+		// gold next to the belt
+		r.sprite('coin', (vw - totalW) / 2 - 24, beltY)
+		r.text(`${p.gold}`, (vw - totalW) / 2 - 16, beltY - 3, COL.gold)
+
+		// combo pips above the belt
+		if (p.comboTimer > 0 && p.comboCount > 0) {
+			const px = vw / 2 - 10
+			for (let i = 0; i < 3; i++) {
+				const lit = i < p.comboCount
+				r.rect(px + i * 8, beltY - size - 8, 6, 3, lit ? COL.gold : rgba(60, 55, 75, 255))
+			}
+		}
+
+		// XP strip along the very bottom
+		r.rect(0, vh - 3, vw, 3, rgba(20, 30, 16, 255))
+		r.rect(0, vh - 3, vw * (p.xp / p.xpNext), 3, COL.xp)
+
+		// attribute/skill point reminder
+		if (p.attrPoints > 0 || p.skillPoints > 0) {
+			if (Math.sin(this.menuT * 5) > 0) {
+				r.text('[TAB] points to spend!', vw / 2, beltY - size - 20, COL.sel, 1, 'center')
+			}
+		}
+
+		// floor / wave label (top, small — the view stays clear)
+		const label = game.mode === 'custom' ? 'CUSTOM MAP — TEST' :
+			game.mode === 'endless' ? `ENDLESS — WAVE ${game.endless.wave}` :
+			`FLOOR ${game.floor} — ${game.world.biome.name}`
+		r.text(label, vw / 2, 4, COL.dim, 1, 'center')
+
+		// interact prompt
+		if (game.interactPrompt) {
+			r.text(`[E] ${game.interactPrompt}`, vw / 2, vh - 64, COL.sel, 1, 'center')
+		}
+
+		// debug/perf overlay
+		if (game.showPerf) {
+			r.text(`fps ${game.loop.fps} · draw ${r.drawCalls} · enemies ${game.world.enemies.length} · fx ${game.particles.pool.active.length}`, 4, 4, COL.dim)
+			if (game.godMode) r.text('GOD MODE', 4, 14, COL.gold)
+		} else if (game.godMode) {
+			r.text('GOD MODE', 4, 4, COL.gold)
+		}
+
+		// hurt vignette + low hp warning
+		if (this.hurtFlash > 0) {
+			r.rect(0, 0, vw, vh, withAlpha(rgba(255, 40, 40, 90), this.hurtFlash * 2))
+		}
+		if (p.hp / p.maxHp < 0.25 && !p.dead) {
+			const a = 0.25 + 0.2 * Math.sin(this.menuT * 6)
+			r.rectOutline(1, 1, vw - 2, vh - 2, withAlpha(COL.danger, a), 2)
+		}
+		// chrono (time-slow) tint
+		if (this.chronoT > 0) {
+			r.rect(0, 0, vw, vh, rgba(180, 60, 200, 26))
+		}
+
+		// boss banner
+		if (this.banner) {
+			const a = Math.min(1, this.banner.t)
+			r.textBig(this.banner.text, vw / 2, vh * 0.3, withAlpha(rgba(255, 80, 80, 255), a), 1.5, 'center')
 		}
 	}
 
@@ -385,6 +429,7 @@ export class UI {
 			{ label: 'Music Volume', value: s.volumes.music },
 			{ label: 'SFX Volume', value: s.volumes.sfx },
 			{ label: 'Screen Shake', value: s.screenShake ? 'ON' : 'OFF' },
+			{ label: 'Level Scaling', value: s.levelScaling ? 'ON' : 'OFF' },
 			{ label: 'Fullscreen', value: document.fullscreenElement ? 'ON' : 'OFF' },
 			{ label: 'Back', value: '' },
 		]
@@ -610,6 +655,22 @@ export class UI {
 			if (!w.sold) r.text(`${w.price}g`, cx + 84, y, afford ? COL.gold : COL.danger, 1, 'right')
 		})
 		r.text('ENTER buy · ESC leave', cx, 148, COL.dim, 1, 'center')
+	}
+
+	drawDebug(r) {
+		const game = this.game
+		const actions = game.debugActions()
+		const w = 170
+		const h = actions.length * 9 + 26
+		const x = 10
+		const y = 16
+		r.rect(0, 0, r.viewW, r.viewH, rgba(0, 0, 0, 120))
+		this.panel(r, x, y, w, h, 'DEBUG')
+		actions.forEach((a, i) => {
+			const selected = i === this.sel
+			r.text(`${selected ? '>' : ' '}${a.label}`, x + 6, y + 17 + i * 9, selected ? COL.sel : a.label.includes('(!)') ? COL.danger : COL.text)
+		})
+		r.text('ENTER apply · ` / ESC close', x + 6, y + h - 9, COL.dim)
 	}
 
 	drawDeath(r) {

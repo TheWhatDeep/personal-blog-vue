@@ -26,6 +26,7 @@ const KEY_BINDINGS = {
 	confirm: ['Enter', 'Space', 'KeyJ'],
 	cancel: ['Escape', 'KeyK'],
 	fullscreen: ['KeyF'],
+	debug: ['Backquote', 'F9'],
 }
 
 // standard-mapping gamepad buttons
