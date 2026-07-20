@@ -23,6 +23,7 @@ export const BIOMES = [
 			{ item: 'skeleton', weight: 4 },
 			{ item: 'goblin_archer', weight: 2 },
 			{ item: 'bat', weight: 2 },
+			{ item: 'shield_skeleton', weight: 2 },
 		],
 	},
 	{
@@ -41,6 +42,7 @@ export const BIOMES = [
 			{ item: 'goblin_archer', weight: 3 },
 			{ item: 'assassin', weight: 2 },
 			{ item: 'bat', weight: 2 },
+			{ item: 'rider', weight: 2 },
 		],
 	},
 	{
@@ -57,6 +59,7 @@ export const BIOMES = [
 			{ item: 'brute', weight: 4 },
 			{ item: 'cultist', weight: 3 },
 			{ item: 'bomber', weight: 3 },
+			{ item: 'lancer', weight: 3 },
 			{ item: 'skeleton', weight: 2 },
 		],
 	},
@@ -76,6 +79,8 @@ export const BIOMES = [
 			{ item: 'cultist', weight: 3 },
 			{ item: 'assassin', weight: 2 },
 			{ item: 'necromancer', weight: 2 },
+			{ item: 'lancer', weight: 2 },
+			{ item: 'shield_skeleton', weight: 2 },
 		],
 	},
 	{
@@ -95,6 +100,7 @@ export const BIOMES = [
 			{ item: 'cultist', weight: 2 },
 			{ item: 'bomber', weight: 2 },
 			{ item: 'brute', weight: 2 },
+			{ item: 'rider', weight: 2 },
 		],
 	},
 ]

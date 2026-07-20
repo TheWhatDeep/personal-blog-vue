@@ -14,6 +14,11 @@ export function createEnemy(defId, x, y, opts = {}) {
 	const hpMul = (opts.hpMul ?? 1) * (elite ? ELITE_MODIFIER.hp : 1)
 	const dmgMul = (opts.dmgMul ?? 1) * (elite ? ELITE_MODIFIER.damage : 1)
 
+	// elites carry an affix that changes how they fight, not just their stats
+	const AFFIXES = ['frenzied', 'volatile', 'vampiric', 'warded']
+	const affix = elite ? (opts.affix ?? AFFIXES[Math.floor(Math.random() * AFFIXES.length)]) : null
+	const AFFIX_TINTS = { frenzied: 0xff5a5aff, volatile: 0xff3a8aff, vampiric: 0xffb04ad2, warded: 0xffd2a44a }
+
 	return {
 		id: nextId++,
 		kind: 'enemy',
@@ -30,7 +35,12 @@ export function createEnemy(defId, x, y, opts = {}) {
 		speed: def.speed * (elite ? ELITE_MODIFIER.speed : 1),
 		xp: Math.round(def.xp * (elite ? ELITE_MODIFIER.xp : 1) * (opts.xpMul ?? 1)),
 		elite,
-		tint: elite ? ELITE_MODIFIER.tint : 0xffffffff,
+		affix,
+		tint: affix ? AFFIX_TINTS[affix] : elite ? ELITE_MODIFIER.tint : 0xffffffff,
+		wardCycle: Math.random() * 5, // warded affix bubble phase
+		guardMeter: 0, // shielded enemies: blocked damage until guard break
+		guardBreakT: 0,
+		noSplit: !!opts.noSplit,
 
 		// FSM state
 		state: 'idle',

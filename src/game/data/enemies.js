@@ -11,6 +11,7 @@ export const ENEMIES = {
 		hp: 18, speed: 42, damage: 6, xp: 6, radius: 6,
 		detect: 90, attackRange: 14, attackCd: 1.1, ai: 'melee',
 		lootTier: 0, poise: 8, hopper: true,
+		split: { count: 2, scale: 0.65, hpMul: 0.35 }, // splits on death
 	},
 	skeleton: {
 		id: 'skeleton', name: 'Skeleton', sprite: 'skeleton',
@@ -89,6 +90,28 @@ export const ENEMIES = {
 		detect: 160, attackRange: 110, attackCd: 1.8, ai: 'ranged',
 		flying: true, projectile: { sprite: 'orb_void', speed: 140 },
 		keepDistance: 80, lootTier: 1, poise: 10,
+	},
+
+	lancer: {
+		id: 'lancer', name: 'Lancer', sprite: 'lancer',
+		hp: 40, speed: 42, damage: 18, xp: 22, radius: 7,
+		detect: 170, attackRange: 150, attackCd: 2.6, ai: 'lancer',
+		chargeSpeed: 300, chargeTelegraph: 0.75, recoverTime: 1.0,
+		lootTier: 1, poise: 40,
+	},
+	rider: {
+		id: 'rider', name: 'Orc Rider', sprite: 'rider',
+		hp: 34, speed: 125, damage: 14, xp: 20, radius: 7,
+		detect: 190, attackRange: 100, attackCd: 2.2, ai: 'rider',
+		orbitRadius: 90, diveSpeed: 290, recoverTime: 0.7,
+		lootTier: 1, poise: 24,
+	},
+	shield_skeleton: {
+		id: 'shield_skeleton', name: 'Shielded Skeleton', sprite: 'shield_skeleton',
+		hp: 45, speed: 44, damage: 10, xp: 20, radius: 7,
+		detect: 130, attackRange: 18, attackCd: 1.2, ai: 'melee',
+		shield: true, guardBreak: 32, // frontal block until this much damage is blocked
+		knockbackResist: 0.5, lootTier: 1, poise: 50,
 	},
 
 	// ---- player summons (team: player) --------------------------------------
