@@ -20,6 +20,7 @@
 const ASSET_URLS = {
 	...import.meta.glob('../assets/*.png', { eager: true, query: '?url', import: 'default' }),
 	...import.meta.glob('../assets/rpg/*.png', { eager: true, query: '?url', import: 'default' }),
+	...import.meta.glob('../assets/v5/*.png', { eager: true, query: '?url', import: 'default' }),
 }
 import fontUrl from '../assets/BoldPixels.ttf'
 
@@ -28,7 +29,10 @@ const T = 16 // pack tile size
 /** Load every pack image + the pixel font; resolves to {name -> Image}. */
 export async function loadAssetPack() {
 	const entries = Object.entries(ASSET_URLS).map(([path, url]) => {
-		const name = path.split('/').pop().replace('.png', '')
+		// v5.2 pack files get a prefix: some basenames (peaks.png) collide
+		// with the older pack's files in assets/ root
+		const prefix = path.includes('/v5/') ? 'v5_' : ''
+		const name = prefix + path.split('/').pop().replace('.png', '')
 		return new Promise((resolve, reject) => {
 			const img = new Image()
 			img.onload = () => resolve([name, img])
@@ -233,12 +237,14 @@ export function applyAssetPack(atlas, imgs) {
 	}
 
 	// ---- tiles: one biome look, tinted per biome ------------------------------
+	// gentler than the old pack's tints: the v5 tileset is already bright,
+	// and hard brightness blows out its cap highlights and floor details
 	const BIOME_TINTS = {
-		crypt: null, // the pack's native purple-brown
-		caverns: { tint: '#9fe0b4', bright: 1.25 },
-		forge: { tint: '#ffb08a', bright: 1.2 },
-		glacier: { tint: '#9cc4ff', bright: 1.25 },
-		abyss: { tint: '#b89aff', bright: 1.1 },
+		crypt: null, // the pack's native palette
+		caverns: { tint: '#9fe0b4', bright: 1.12 },
+		forge: { tint: '#ffb08a', bright: 1.08 },
+		glacier: { tint: '#9cc4ff', bright: 1.1 },
+		abyss: { tint: '#b89aff', bright: 1.05 },
 	}
 	for (const [biome, tint] of Object.entries(BIOME_TINTS)) {
 		const o = tint ?? {}
@@ -301,6 +307,66 @@ export function applyAssetPack(atlas, imgs) {
 	rpgChar('boss_golem', 'eliteorc', { scale: 2, tint: '#ffb090' })
 	rpgChar('boss_lich', 'necromancer', { scale: 2, tint: '#9cd4ff' })
 	rpgChar('boss_void', 'templar', { scale: 2, tint: '#c0a0ff', bright: 0.9 })
+
+	// ---- Dungeon Tileset II v5.2 (assets/v5/) -----------------------------------
+	// Raw grid slices: every 16px cell of the two sheets is registered as
+	// v5t_{col}_{row} (tileset) / v5p_{col}_{row} (props) so the resolver and
+	// the debug asset-preview address cells by grid coordinate. Semantic
+	// aliases for the wall grammar live in TileVisuals' piece table — data,
+	// not code, decides which cell plays which architectural role.
+	if (imgs.v5_Dungeon_Tileset_v2) {
+		const ts = imgs.v5_Dungeon_Tileset_v2
+		for (let row = 0; row < 10; row++) {
+			for (let col = 0; col < 10; col++) {
+				put(`v5t_${col}_${row}`, ts, col * T, row * T, T, T)
+				// per-biome tinted copies so TileVisuals' lookup table can swap
+				// the whole wall/floor grammar per biome (crypt = native palette)
+				for (const [biome, tint] of Object.entries(BIOME_TINTS)) {
+					if (tint) put(`v5t_${col}_${row}_${biome}`, ts, col * T, row * T, T, T, tint)
+				}
+			}
+		}
+		const pr = imgs.v5_Dungeon_item_props_v2
+		for (let row = 0; row < 5; row++) {
+			for (let col = 0; col < 12; col++) {
+				put(`v5p_${col}_${row}`, pr, col * T, row * T, T, T)
+			}
+		}
+		for (let i = 0; i < 4; i++) {
+			put(`v5e_${i}`, imgs.v5_Dungeon_Enemy_v2, i * T, 0, T, T)
+		}
+
+		// magenta/black checker: shown when the wall resolver meets a neighbor
+		// configuration the sheet has no piece for (never silently patched)
+		const err = document.createElement('canvas')
+		err.width = err.height = T
+		const ec = err.getContext('2d')
+		ec.fillStyle = '#ff00ff'
+		ec.fillRect(0, 0, T, T)
+		ec.fillStyle = '#000000'
+		ec.fillRect(0, 0, 8, 8)
+		ec.fillRect(8, 8, 8, 8)
+		put('v5t_error', err, 0, 0, T, T)
+
+		// animation strips (frame sizes verified against the sheets:
+		// torch/torch_light are 16x28, the gate is 16x32 incl. its floor glow)
+		const V5_STRIPS = [
+			['v5_torch', 'v5_torch', 16, 28, 6],
+			['v5_torch_light', 'v5_torch_light', 16, 28, 6],
+			['v5_gate', 'v5_gate', 16, 32, 5],
+			['v5_peaks', 'v5_peaks', 16, 16, 5],
+			['v5_chest', 'v5_chest_1', 16, 16, 4],
+			['v5_chest_small', 'v5_chest_2', 16, 16, 4],
+			['v5_coin', 'v5_coin', 16, 16, 8],
+			['v5_key_gold', 'v5_keys_g', 16, 16, 8],
+			['v5_key_silver', 'v5_keys_m', 16, 16, 8],
+			['v5_flag_blue', 'v5_flag_b', 16, 16, 10],
+			['v5_flag_red', 'v5_flag_r', 16, 16, 10],
+		]
+		for (const [name, img, fw, fh, count] of V5_STRIPS) {
+			if (imgs[img]) putStrip(name, imgs[img], fw, fh, count)
+		}
+	}
 
 	// ---- UI font ---------------------------------------------------------------
 	// Bold Pixels' native grid is 16px (at 8px its 1px counters collapse and

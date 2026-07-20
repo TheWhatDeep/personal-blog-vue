@@ -111,9 +111,14 @@ export class Physics {
 		const player = game.player
 		const biome = world.biome
 
+		// spike traps only hurt while extended (they telegraph via animation)
+		const spikeSafe = (x, y) =>
+			biome.hazardType === 'spikes' &&
+			!world.spikesOut(Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE))
+
 		this.playerHazardTimer = Math.max(0, this.playerHazardTimer - dt)
 		if (!player.dead && player.rollTime <= 0 && this.playerHazardTimer <= 0) {
-			if (world.map.tileAt(player.x, player.y) === TILE.HAZARD) {
+			if (world.map.tileAt(player.x, player.y) === TILE.HAZARD && !spikeSafe(player.x, player.y)) {
 				this.playerHazardTimer = 0.6
 				const dmg = 4 + Math.floor(world.floor * 0.8)
 				game.combat.damagePlayer(dmg, { noKnockback: true, isHazard: true })
@@ -127,7 +132,7 @@ export class Physics {
 		for (const e of world.enemies) {
 			if (e.dead || e.def.flying) continue
 			e.hazardTimer = Math.max(0, (e.hazardTimer || 0) - dt)
-			if (e.hazardTimer <= 0 && world.map.tileAt(e.x, e.y) === TILE.HAZARD) {
+			if (e.hazardTimer <= 0 && world.map.tileAt(e.x, e.y) === TILE.HAZARD && !spikeSafe(e.x, e.y)) {
 				e.hazardTimer = 0.8
 				game.combat.damageEntity(e, 3, { noKnockback: true })
 			}
