@@ -806,7 +806,15 @@ export class Game {
 		for (const fx of world.effects) {
 			if (fx.t < 0) continue
 			const a = 1 - fx.t / fx.dur
-			if (fx.type === 'sprite') {
+			if (fx.type === 'anim') {
+				// death animations: play through once, fade at the very end
+				const frames = this.atlas.anims[fx.name]
+				if (frames) {
+					const t = Math.min(fx.t, (frames.length - 0.01) / fx.fps)
+					const alpha = Math.min(1, a * 4)
+					r.animSprite(fx.name, t, fx.x, fx.y, withAlpha(0xffffffff, alpha), 0, fx.flipX, fx.scale ?? 1, fx.fps)
+				}
+			} else if (fx.type === 'sprite') {
 				r.sprite(fx.sprite, fx.x, fx.y, withAlpha(0xffffffff, a), fx.rot, false, fx.scale ?? 1)
 			} else if (fx.type === 'line') {
 				r.line(fx.x, fx.y, fx.x2, fx.y2, withAlpha(fx.color, a), 2)
@@ -836,37 +844,35 @@ export class Game {
 		if (p.iframes > 0 && p.rollTime <= 0 && Math.floor(p.iframes * 14) % 2 === 0) return
 		this._shadow(r, p.x, p.y + 5, 10)
 
-		// walking: bob + tilt wobble (the pack has idle frames only, so
-		// body motion is what sells movement)
-		const bob = p.moving ? Math.sin(p.walkT * 13) * 1.3 : 0
+		const anims = this.atlas.anims
+		const base = p.classDef.sprite
 		let rot = 0
 		if (p.rollTime > 0) {
 			rot = ((0.26 - p.rollTime) / 0.26) * Math.PI * 2 * (p.rollDirX >= 0 ? 1 : -1)
-		} else if (p.moving) {
-			rot = Math.sin(p.walkT * 13) * 0.09
 		}
 
-		// attack lunge: quick step toward the aim direction with a size pop
+		// pick the animation: attack strip plays once > walk cycle > idle
+		let name = base
+		let t = p.animT
+		let fps = 6
 		let ox = 0
 		let oy = 0
-		let scale = 1
-		if (p.attackAnim > 0) {
-			const k = p.attackAnim / 0.18
-			ox = p.facingX * 3.5 * k
-			oy = p.facingY * 3.5 * k
-			scale = 1 + 0.12 * k
-			rot += p.facingX * 0.12 * k
+		if (p.attackAnim > 0 && anims[`${base}_attack`]) {
+			const variant = p.attackVariant === 2 && anims[`${base}_attack2`] ? '_attack2' : '_attack'
+			name = base + variant
+			const dur = p.attackAnimDur || 0.3
+			t = Math.min(dur - p.attackAnim, dur - 0.001)
+			fps = anims[name].length / dur
+			ox = p.facingX * 1.5 // slight lunge under the swing
+			oy = p.facingY * 1.5
+		} else if (p.moving && anims[`${base}_walk`]) {
+			name = `${base}_walk`
+			t = p.walkT
+			fps = 12
 		}
 
 		const tint = p.flash > 0 ? rgba(255, 90, 90, 255) : 0xffffffff
-		// use the walk-cycle frames while moving (falls back to idle frames)
-		let spriteName = p.classDef.sprite
-		let animT = p.animT
-		if (p.moving && this.atlas.anims[`${spriteName}_walk`]) {
-			spriteName += '_walk'
-			animT = p.walkT
-		}
-		r.animSprite(spriteName, animT, p.x + ox, p.y - 3 + bob + oy, tint, rot, p.facingX < 0, scale, p.moving ? 9 : 4)
+		r.animSprite(name, t, p.x + ox, p.y - 3 + oy, tint, rot, p.facingX < 0, 1, fps)
 		// shield bubble
 		if (p.shieldHp > 0) {
 			r.circleOutline(p.x, p.y - 2, 11 + Math.sin(this.ui.menuT * 6), withAlpha(rgba(220, 210, 160, 255), 0.6))
@@ -877,38 +883,39 @@ export class Game {
 		this._shadow(r, e.x, e.y + e.r - 1, e.r * 1.6)
 		const def = e.def
 		const sprite = e.spriteOverride ?? (e.kind === 'boss' ? e.bossDef.sprite : def.sprite)
+		const anims = this.atlas.anims
 		const isMoving = Math.abs(e.vx) + Math.abs(e.vy) > 2
-		let bob = isMoving ? Math.sin(e.animT * 11) * 1.2 : 0
-		if (def.flying) bob = Math.sin(e.animT * 9) * 3
-		if (def.hopper) bob = -Math.abs(Math.sin(e.animT * 6)) * 3
-		let rot = isMoving && !def.flying ? Math.sin(e.animT * 11) * 0.07 : 0
-		let scale = e.scale
-		if (e.kind === 'boss') scale = e.scale * (1 + Math.sin(e.animT * 3) * 0.03)
+		const hasRealWalk = !!anims[`${sprite}_walk`]
 
-		// attack pose: lean into the strike and pop slightly
-		let lean = 0
-		if (e.state === 'attack') {
-			scale *= 1.1
-			lean = e.facing * 2
-			rot += e.facing * 0.1
-		}
+		let bob = 0
+		if (def.flying) bob = Math.sin(e.animT * 9) * 3
+		else if (!hasRealWalk && isMoving) bob = Math.sin(e.animT * 11) * 1.2
+		let rot = 0
+		let scale = e.scale
+		if (e.kind === 'boss') scale = e.scale * (1 + Math.sin(e.animT * 3) * 0.02)
 
 		let tint = e.tint
 		if (e.flash > 0) tint = rgba(255, 80, 80, 255)
 		else if (e.team === 'player') tint = rgba(140, 220, 255, 255)
 
-		// state-based animation: attack strip (bosses), walk cycle, or idle
-		const anims = this.atlas.anims
+		// state-based animation: hurt > attack strip > walk cycle > idle
 		let name = sprite
-		let fps = e.kind === 'boss' ? 7 : 5
-		if (e.kind === 'boss' && e.attackPoseT > 0 && anims[`${sprite}_attack`]) {
+		let t = e.animT
+		let fps = 6
+		const attacking = e.kind === 'boss' ? e.attackPoseT > 0 : e.state === 'attack'
+		if (e.flash > 0 && anims[`${sprite}_hurt`]) {
+			name = `${sprite}_hurt`
+			t = 0.12 - e.flash
+			fps = 16
+		} else if (attacking && anims[`${sprite}_attack`]) {
 			name = `${sprite}_attack`
+			t = e.kind === 'boss' ? e.animT : e.stateTime
 			fps = 12
 		} else if ((e.kind === 'boss' ? e.movingT > 0 : isMoving) && anims[`${sprite}_walk`]) {
 			name = `${sprite}_walk`
-			fps = e.kind === 'boss' ? 10 : 8
+			fps = 12
 		}
-		r.animSprite(name, e.animT, e.x + lean, e.y - e.r * 0.5 + bob, tint, rot, e.facing < 0, scale, fps)
+		r.animSprite(name, t, e.x, e.y - e.r * 0.5 + bob, tint, rot, e.facing < 0, scale, fps)
 
 		// mini health bar when damaged (bosses use the big UI bar)
 		if (e.kind !== 'boss' && e.hp < e.maxHp && e.team === 'enemy') {

@@ -15,9 +15,10 @@ import { Rng } from '../core/Rng.js'
  * One atlas + one shader = the whole frame batches into ~2 draw calls.
  */
 
-// 1024 leaves room for the downloaded asset pack to be composed on top of
-// the procedural sprites (which remain as fallback + fill the gaps).
-const ATLAS_SIZE = 1024
+// 2048 leaves room for the downloaded asset packs (22 fully-animated
+// characters) composed on top of the procedural sprites (which remain as
+// fallback + fill the gaps). 16MB of RGBA — trivial for any WebGL device.
+const ATLAS_SIZE = 2048
 const PAD = 1
 
 export class Atlas {

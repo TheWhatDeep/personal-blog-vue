@@ -1,22 +1,26 @@
 /**
- * Downloaded asset pack integration ("2D Pixel Dungeon Asset Pack" +
- * "Enemy Animations Set" by Pixel Poem — see ../assets/CREDITS.md).
+ * Downloaded asset pack integration — see ../assets/CREDITS.md.
  *
- * The pack's art is composed ON TOP of the procedural atlas: every sprite
- * the pack covers gets its atlas region re-pointed at pack art (with
- * optional tint / hue-shift / scale / flip variants and animation frames),
- * while anything the pack lacks keeps its procedural region. Engine and
- * gameplay code are untouched — this file is pure art mapping, and if the
- * images fail to load the game silently keeps its procedural look.
+ *  - Pixel Poem "2D Pixel Dungeon Asset Pack": tiles, props, pickups.
+ *  - Zerie "Tiny RPG Character Asset Pack" (22 characters): every hero,
+ *    most enemies and all bosses, with real idle/walk/attack/hurt/death
+ *    animation strips (100x100 frames, ink-cropped with anchor offsets).
+ *  - "Bold Pixels" TTF: display font for titles/headers.
+ *
+ * The pack art is composed ON TOP of the procedural atlas: every sprite a
+ * pack covers gets its atlas region re-pointed (with optional tint /
+ * hue-shift / scale variants), while anything the packs lack keeps its
+ * procedural region. Engine and gameplay code are untouched — this file is
+ * pure art mapping, and if the images fail to load the game silently keeps
+ * its procedural look.
  */
 
 // Vite turns these into hashed URLs at build time and bundles the files,
 // so the game remains fully offline once loaded.
-const ASSET_URLS = import.meta.glob('../assets/*.png', {
-	eager: true,
-	query: '?url',
-	import: 'default',
-})
+const ASSET_URLS = {
+	...import.meta.glob('../assets/*.png', { eager: true, query: '?url', import: 'default' }),
+	...import.meta.glob('../assets/rpg/*.png', { eager: true, query: '?url', import: 'default' }),
+}
 import fontUrl from '../assets/BoldPixels.ttf'
 
 const T = 16 // pack tile size
@@ -154,22 +158,78 @@ export function applyAssetPack(atlas, imgs) {
 	const tile = (name, col, row, opts = {}, w = 1, h = 1) =>
 		put(name, imgs.tileset, col * T, row * T, w * T, h * T, opts)
 
-	/**
-	 * Character sheet helper: two idle frames (rows r and r+2 hold frame A/B)
-	 * plus a synthesized `<name>_walk` cycle (alternating leg lifts).
-	 */
+	/** Character sheet helper: two idle frames (rows r and r+2 hold frame A/B). */
 	const char = (name, col, row, opts = {}) => {
 		const o = { clearCorners: true, ...opts }
 		const a = put(name, imgs.characters, col * T, row * T, T, T, o)
 		const b = put(`${name}#1`, imgs.characters, col * T, (row + 2) * T, T, T, o)
 		atlas.anims[name] = [a, b]
-		atlas.anims[`${name}_walk`] = [
-			put(`${name}_walk`, imgs.characters, col * T, row * T, T, T, { ...o, legLift: 'L' }),
-			put(`${name}_walk#1`, imgs.characters, col * T, (row + 2) * T, T, T, { ...o, legLift: 'R' }),
-		]
 	}
 
 	const seq = (base, n) => Array.from({ length: n }, (_, i) => imgs[`${base}_${i + 1}`])
+
+	// ---- Tiny RPG character pack (100x100 frame strips) -------------------------
+	// Characters sit tiny (~18px) inside big frames padded for weapon swings.
+	// Each strip is ink-cropped to its union bounding box and an anchor offset
+	// is stored on the regions so all animations stay aligned on the entity.
+	const RPG_F = 100 // frame size
+	const RPG_AX = 50 // character anchor within the frame
+	const RPG_AY = 48
+
+	const rpgStrip = (name, img, opts = {}) => {
+		if (!img) return
+		const count = Math.floor(img.width / RPG_F)
+		// union ink bbox across all frames (in frame-local coords)
+		const t = document.createElement('canvas')
+		t.width = img.width
+		t.height = RPG_F
+		const tc2 = t.getContext('2d', { willReadFrequently: true })
+		tc2.drawImage(img, 0, 0)
+		const d = tc2.getImageData(0, 0, img.width, RPG_F).data
+		let minX = RPG_F, maxX = 0, minY = RPG_F, maxY = 0
+		for (let y = 0; y < RPG_F; y++) {
+			for (let x = 0; x < img.width; x++) {
+				if (d[(y * img.width + x) * 4 + 3] > 10) {
+					const lx = x % RPG_F
+					if (lx < minX) minX = lx
+					if (lx > maxX) maxX = lx
+					if (y < minY) minY = y
+					if (y > maxY) maxY = y
+				}
+			}
+		}
+		if (maxX < minX) return
+		minX = Math.max(0, minX - 1); minY = Math.max(0, minY - 1)
+		maxX = Math.min(RPG_F - 1, maxX + 1); maxY = Math.min(RPG_F - 1, maxY + 1)
+		const w = maxX - minX + 1
+		const h = maxY - minY + 1
+		const scale = opts.scale ?? 1
+		const frames = []
+		for (let i = 0; i < count; i++) {
+			const r = put(i === 0 ? name : `${name}#${i}`, img, i * RPG_F + minX, minY, w, h, opts)
+			r.ox = ((minX + maxX) / 2 - RPG_AX) * scale
+			r.oy = ((minY + maxY) / 2 - RPG_AY) * scale
+			frames.push(r)
+		}
+		atlas.anims[name] = frames
+	}
+
+	/** Register a full character: idle/walk/attack(+2)/hurt/death strips. */
+	const rpgChar = (name, key, opts = {}) => {
+		const strip = (suffix, animName) => rpgStrip(animName, imgs[`rpg_${key}_${suffix}`], opts)
+		if (imgs[`rpg_${key}_fly`]) {
+			// flying creatures (bat): one strip serves as idle + walk
+			strip('fly', name)
+			strip('fly', `${name}_walk`)
+		} else {
+			strip('idle', name)
+			strip('walk', `${name}_walk`)
+		}
+		strip('attack', `${name}_attack`)
+		strip('attack2', `${name}_attack2`)
+		strip('hurt', `${name}_hurt`)
+		strip('death', `${name}_death`)
+	}
 
 	// ---- tiles: one biome look, tinted per biome ------------------------------
 	const BIOME_TINTS = {
@@ -199,51 +259,44 @@ export function applyAssetPack(atlas, imgs) {
 	put('barrel', imgs.box, 0, 0, T, T)
 	putFrames('torch', seq('torch', 4))
 	tile('shrine', 5, 9) // candle altar
-	putFrames('shop_npc', seq('priest2', 4))
 
 	// ---- pickups / items -----------------------------------------------------------
 	putFrames('coin', seq('coin', 4))
 	tile('potion_red', 9, 8)
 	tile('potion_blue', 7, 8)
 	tile('item_ring', 5, 7)
-	// arrow art points down; bake it facing right (rot 0 = right in-engine)
-	put('arrow', imgs.arrow, 0, 0, T, T, { rotate: -Math.PI / 2 })
+	put('arrow', imgs.rpg_arrow, 0, 0, 32, 32) // already faces right (rot 0)
 
-	// ---- heroes ----------------------------------------------------------------------
-	char('hero_warrior', 2, 0, { tint: '#ffb0a0' })
-	char('hero_rogue', 3, 0, { tint: '#9fd6a4' })
-	char('hero_ranger', 4, 0, { tint: '#c8e69a' })
-	char('hero_mage', 1, 0, { tint: '#a8c4ff' })
-	putFrames('hero_cleric', seq('priest1', 4), { tint: '#ffe9b0', walk: true })
+	// ---- heroes (Tiny RPG pack, native scale) -------------------------------------
+	rpgChar('hero_warrior', 'knight')
+	rpgChar('hero_rogue', 'swordsman')
+	rpgChar('hero_mage', 'wizard')
+	rpgChar('hero_ranger', 'archer')
+	rpgChar('hero_cleric', 'priest')
 
-	// ---- enemies ----------------------------------------------------------------------
-	char('slime', 1, 1, { hue: -120 }) // blue imp -> green
-	char('slime_red', 1, 1, { hue: 120 }) // blue imp -> red
-	char('skeleton', 5, 0)
-	char('goblin_archer', 4, 1, { hue: 60 }) // orange skeleton -> green
-	putFrames('cultist', seq('priest3', 4), { tint: '#e08080', walk: true })
-	putFrames('assassin', seq('vampire', 4), { tint: '#9a90b8', walk: true })
-	char('brute', 6, 1, { scale: 1.3 })
-	char('brute_frost', 6, 1, { scale: 1.3, tint: '#a8d8ff' })
-	char('necromancer', 0, 0, { tint: '#c9a8e8' })
-	putFrames('bat', seq('skull', 4), { hue: 40, bright: 0.9 }) // ghostly skull
-	putFrames('bat_frost', seq('skull', 4))
-	char('bomber', 0, 1, { hue: 150 }) // blue flame -> red, a living bomb
-	char('spiderling', 3, 1, { scale: 0.75, bright: 0.8 })
-	char('wisp', 0, 1)
+	// ---- enemies --------------------------------------------------------------------
+	rpgChar('slime', 'slime')
+	rpgChar('slime_red', 'slime', { hue: 120, bright: 0.95 })
+	rpgChar('bomber', 'slime', { hue: 150, bright: 1.2 }) // volatile red slime
+	rpgChar('spiderling', 'slime', { scale: 0.7, bright: 0.75, tint: '#d0b8f0' })
+	rpgChar('skeleton', 'skeleton')
+	rpgChar('goblin_archer', 'skelarcher')
+	rpgChar('cultist', 'necromancer', { tint: '#ff9a9a' })
+	rpgChar('assassin', 'werewolf')
+	rpgChar('brute', 'armoredorc')
+	rpgChar('brute_frost', 'armoredorc', { tint: '#a8d8ff' })
+	rpgChar('necromancer', 'necromancer')
+	rpgChar('bat', 'bat')
+	rpgChar('bat_frost', 'bat', { tint: '#a8d8ff' })
+	rpgChar('shop_npc', 'soldier')
+	char('wisp', 0, 1) // Pixel Poem blue flame still fits the void wisp
 
-	// ---- bosses: large animated monsters from the Enemy Animations Set ---------------
-	// idle + real walk/attack strips, tinted per boss
-	const boss = (name, base, opts) => {
-		putStrip(name, imgs[base], 32, 32, imgs[base].width / 32, opts)
-		putStrip(`${name}_walk`, imgs[`${base}_walk`], 32, 32, imgs[`${base}_walk`].width / 32, opts)
-		putStrip(`${name}_attack`, imgs[`${base}_attack`], 32, 32, imgs[`${base}_attack`].width / 32, opts)
-	}
-	boss('boss_tyrant', 'boss_skeleton1', { tint: '#ffe08a' })
-	boss('boss_spider', 'boss_vampire', { tint: '#b4e8a0', scale: 1.1 })
-	boss('boss_golem', 'boss_skeleton2', { tint: '#ff9a70', scale: 1.15 })
-	boss('boss_lich', 'boss_vampire', { tint: '#9cd4ff' })
-	boss('boss_void', 'boss_skeleton1', { tint: '#b48aff', bright: 0.9, scale: 1.2 })
+	// ---- bosses: Tiny RPG characters at crisp 2x, tinted per biome -------------------
+	rpgChar('boss_tyrant', 'greatsword', { scale: 2, tint: '#ffe08a' })
+	rpgChar('boss_spider', 'werebear', { scale: 2, tint: '#b4e8a0' })
+	rpgChar('boss_golem', 'eliteorc', { scale: 2, tint: '#ffb090' })
+	rpgChar('boss_lich', 'necromancer', { scale: 2, tint: '#9cd4ff' })
+	rpgChar('boss_void', 'templar', { scale: 2, tint: '#c0a0ff', bright: 0.9 })
 
 	// ---- UI font ---------------------------------------------------------------
 	// Bold Pixels' native grid is 16px (at 8px its 1px counters collapse and

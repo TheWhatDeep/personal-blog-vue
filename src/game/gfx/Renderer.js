@@ -228,13 +228,11 @@ export class Renderer {
 		this.quadCount++
 	}
 
-	/** Draw a sprite by atlas name, centered on (cx, cy). */
+	/** Draw a sprite by atlas name, centered on (cx, cy) (+ region anchor offset). */
 	sprite(name, cx, cy, color = WHITE, rot = 0, flipX = false, scale = 1) {
 		const r = this.atlas.regions[name]
 		if (!r) return
-		const w = r.w * scale
-		const h = r.h * scale
-		this.draw(r, cx - w / 2, cy - h / 2, w, h, color, rot, flipX)
+		this._spriteRegion(r, cx, cy, color, rot, flipX, scale)
 	}
 
 	/**
@@ -248,9 +246,17 @@ export class Renderer {
 			return
 		}
 		const r = frames[Math.floor(Math.abs(t) * fps) % frames.length]
+		this._spriteRegion(r, cx, cy, color, rot, flipX, scale)
+	}
+
+	_spriteRegion(r, cx, cy, color, rot, flipX, scale) {
 		const w = r.w * scale
 		const h = r.h * scale
-		this.draw(r, cx - w / 2, cy - h / 2, w, h, color, rot, flipX)
+		// ink-cropped regions carry an anchor offset so animation frames of
+		// different sizes stay aligned on the entity (mirrored when flipped)
+		const ox = (r.ox ?? 0) * scale * (flipX ? -1 : 1)
+		const oy = (r.oy ?? 0) * scale
+		this.draw(r, cx + ox - w / 2, cy + oy - h / 2, w, h, color, rot, flipX)
 	}
 
 	/** Solid rectangle using the atlas' white pixel. */
