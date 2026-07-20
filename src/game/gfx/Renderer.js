@@ -123,6 +123,7 @@ export class Renderer {
 		this.atlas = atlas
 		this.whiteRegion = atlas.regions.white
 		const gl = this.gl
+		if (this.texture) gl.deleteTexture(this.texture) // hot-swap (asset pack load)
 		this.texture = gl.createTexture()
 		gl.bindTexture(gl.TEXTURE_2D, this.texture)
 		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlas.canvas)
@@ -231,6 +232,22 @@ export class Renderer {
 	sprite(name, cx, cy, color = WHITE, rot = 0, flipX = false, scale = 1) {
 		const r = this.atlas.regions[name]
 		if (!r) return
+		const w = r.w * scale
+		const h = r.h * scale
+		this.draw(r, cx - w / 2, cy - h / 2, w, h, color, rot, flipX)
+	}
+
+	/**
+	 * Draw a sprite cycling its animation frames with time t (seconds).
+	 * Falls back to the static region when the sprite has no frames.
+	 */
+	animSprite(name, t, cx, cy, color = WHITE, rot = 0, flipX = false, scale = 1, fps = 6) {
+		const frames = this.atlas.anims[name]
+		if (!frames || frames.length === 0) {
+			this.sprite(name, cx, cy, color, rot, flipX, scale)
+			return
+		}
+		const r = frames[Math.floor(Math.abs(t) * fps) % frames.length]
 		const w = r.w * scale
 		const h = r.h * scale
 		this.draw(r, cx - w / 2, cy - h / 2, w, h, color, rot, flipX)

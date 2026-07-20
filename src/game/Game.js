@@ -3,6 +3,7 @@ import { EventBus } from './core/EventBus.js'
 import { Rng } from './core/Rng.js'
 import { Renderer, rgba, withAlpha } from './gfx/Renderer.js'
 import { Atlas } from './gfx/Atlas.js'
+import { loadAssetPack, applyAssetPack } from './gfx/AssetPack.js'
 import { Camera } from './gfx/Camera.js'
 import { ParticleSystem } from './gfx/Particles.js'
 import { Input } from './input/Input.js'
@@ -38,6 +39,15 @@ export class Game {
 		this.renderer = new Renderer(canvas)
 		this.atlas = new Atlas().build(BIOMES)
 		this.renderer.setAtlas(this.atlas)
+
+		// Compose the downloaded asset pack over the procedural atlas; if it
+		// fails to load, the procedural art above already covers everything.
+		loadAssetPack()
+			.then((imgs) => {
+				applyAssetPack(this.atlas, imgs)
+				this.renderer.setAtlas(this.atlas)
+			})
+			.catch((e) => console.warn('Asset pack unavailable, using procedural art:', e))
 		this.camera = new Camera(this.renderer)
 		this.particles = new ParticleSystem()
 		this.input = new Input(window)
@@ -733,7 +743,7 @@ export class Game {
 				p.type === 'potion_mp' ? 'potion_blue' :
 				p.type === 'book' ? 'item_tome' :
 				p.item ? p.item.icon : 'coin'
-			r.sprite(sprite, p.x, p.y + bob - 3, 0xffffffff)
+			r.animSprite(sprite, p.age, p.x, p.y + bob - 3, 0xffffffff)
 			if (p.type === 'item' && p.item && p.item.rarity >= 2) {
 				// rarity glimmer for good drops
 				r.circleOutline(p.x, p.y - 3, 7 + Math.sin(p.age * 4) * 1.5, withAlpha(RARITY_GLOW[p.item.rarity] ?? 0xffffffff, 0.5))
@@ -760,10 +770,10 @@ export class Game {
 				}
 				case 'shop':
 					this._shadow(r, prop.x, prop.y + 6, 10)
-					r.sprite('shop_npc', prop.x, prop.y)
+					r.animSprite('shop_npc', prop.t ?? this.ui.menuT, prop.x, prop.y)
 					break
 				case 'torch':
-					r.sprite('torch', prop.x, prop.y)
+					r.animSprite('torch', prop.t, prop.x, prop.y, 0xffffffff, 0, false, 1, 8)
 					break
 				case 'portal': {
 					const s = 1 + Math.sin(this.ui.menuT * 3) * 0.08
@@ -828,7 +838,7 @@ export class Game {
 		const bob = p.moving ? Math.sin(p.animT) * 1.2 : 0
 		const rot = p.rollTime > 0 ? (0.26 - p.rollTime) / 0.26 * Math.PI * 2 * (p.rollDirX >= 0 ? 1 : -1) : 0
 		const tint = p.flash > 0 ? rgba(255, 90, 90, 255) : 0xffffffff
-		r.sprite(p.classDef.sprite, p.x, p.y - 3 + bob, tint, rot, p.facingX < 0)
+		r.animSprite(p.classDef.sprite, p.animT * 0.4, p.x, p.y - 3 + bob, tint, rot, p.facingX < 0, 1, p.moving ? 10 : 4)
 		// shield bubble
 		if (p.shieldHp > 0) {
 			r.circleOutline(p.x, p.y - 2, 11 + Math.sin(this.ui.menuT * 6), withAlpha(rgba(220, 210, 160, 255), 0.6))
@@ -850,7 +860,7 @@ export class Game {
 		if (e.flash > 0) tint = rgba(255, 80, 80, 255)
 		else if (e.team === 'player') tint = rgba(140, 220, 255, 255)
 
-		r.sprite(sprite, e.x, e.y - e.r * 0.5 + bob, tint, 0, e.facing < 0, scale)
+		r.animSprite(sprite, e.animT * 0.6, e.x, e.y - e.r * 0.5 + bob, tint, 0, e.facing < 0, scale)
 
 		// mini health bar when damaged (bosses use the big UI bar)
 		if (e.kind !== 'boss' && e.hp < e.maxHp && e.team === 'enemy') {

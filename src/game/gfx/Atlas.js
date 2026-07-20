@@ -14,7 +14,9 @@ import { Rng } from '../core/Rng.js'
  * One atlas + one shader = the whole frame batches into ~2 draw calls.
  */
 
-const ATLAS_SIZE = 512
+// 1024 leaves room for the downloaded asset pack to be composed on top of
+// the procedural sprites (which remain as fallback + fill the gaps).
+const ATLAS_SIZE = 1024
 const PAD = 1
 
 export class Atlas {
@@ -24,6 +26,7 @@ export class Atlas {
 		this.canvas.height = ATLAS_SIZE
 		this.ctx = this.canvas.getContext('2d', { willReadFrequently: true })
 		this.regions = {}
+		this.anims = {} // name -> [regions] for multi-frame sprites
 		this.font = null
 		// shelf packer state
 		this._x = 0

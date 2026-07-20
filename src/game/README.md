@@ -1,9 +1,17 @@
 # Dungeon Depths
 
 A 2D pixel-art roguelite dungeon crawler rendered entirely with WebGL.
-Playable at `/game`. No external assets: all pixel art, tiles, fonts and
-audio are generated procedurally at load, so the game is fully playable
-offline once loaded.
+Playable at `/game`.
+
+Art comes from Pixel Poem's *2D Pixel Dungeon Asset Pack* and *Enemy
+Animations Set* (see `assets/CREDITS.md`), composed into the runtime
+texture atlas with per-biome tints, hue-shift variants and idle animation
+frames (`gfx/AssetPack.js`). Everything the packs don't cover — spell
+orbs, skill/item icons, particles, the bitmap font, and all audio — is
+generated procedurally at load (`gfx/PixelArt.js`), and the procedural
+versions of every sprite remain as an automatic fallback if the pack
+fails to load. Assets are bundled by Vite, so the game stays fully
+playable offline once loaded.
 
 ## Playing
 
@@ -34,8 +42,10 @@ core/      GameLoop (fixed 60Hz timestep, render decoupled), EventBus,
            seeded Rng, ObjectPool, SpatialGrid (uniform hash broad-phase)
 gfx/       Renderer (WebGL sprite batcher, ~2 draw calls/frame), Shader,
            Atlas (procedural texture atlas + bitmap font), PixelArt
-           (all sprites as palette-mapped pixel strings), Camera
-           (smooth-follow + trauma shake), Particles (pooled)
+           (fallback sprites as palette-mapped pixel strings), AssetPack
+           (maps the downloaded Pixel Poem art onto atlas regions with
+           tints/hue-shifts/animation frames), Camera (smooth-follow +
+           trauma shake), Particles (pooled)
 input/     Keyboard + gamepad mapped onto named actions
 audio/     WebAudio synth SFX (SoundDefs) + procedural chiptune sequencer
            (MusicDefs) with master/music/sfx channels

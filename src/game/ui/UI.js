@@ -331,7 +331,7 @@ export class UI {
 			r.rect(x, y, cardW, 64, selected ? COL.panelLight : COL.panel)
 			r.rectOutline(x, y, cardW, 64, selected ? COL.sel : COL.border)
 			const bob = selected ? Math.sin(this.menuT * 4) * 2 : 0
-			r.sprite(c.sprite, x + cardW / 2, y + 24 + bob, unlocked ? 0xffffffff : rgba(60, 60, 60, 255), 0, false, 2)
+			r.animSprite(c.sprite, this.menuT, x + cardW / 2, y + 24 + bob, unlocked ? 0xffffffff : rgba(60, 60, 60, 255), 0, false, 2, selected ? 6 : 3)
 			r.text(unlocked ? c.name : '???', x + cardW / 2, y + 50, unlocked ? COL.text : COL.dim, 1, 'center')
 			x += cardW + gap
 		}
