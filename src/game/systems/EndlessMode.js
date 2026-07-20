@@ -1,5 +1,6 @@
 import { BIOMES } from '../data/biomes.js'
 import { BOSS_LIST } from '../data/bosses.js'
+import { BALANCE } from '../data/balance.js'
 import { TILE_SIZE } from '../world/TileMap.js'
 import { TAU } from '../core/MathUtil.js'
 
@@ -90,8 +91,9 @@ export class EndlessMode {
 			this.bossWaveActive = true
 			const bossDef = BOSS_LIST[Math.floor(Math.random() * BOSS_LIST.length)]
 			const pos = this._spawnPoint(120)
-			// scale endless bosses down from their story HP, up with difficulty
-			game.bossManager._spawn({ bossId: bossDef.id, x: pos.x, y: pos.y, hpMul: 0.45 * d })
+			// scale wave bosses down from their (now beefy) story HP,
+			// up with difficulty — see data/balance.js
+			game.bossManager._spawn({ bossId: bossDef.id, x: pos.x, y: pos.y, hpMul: BALANCE.arenaBossHpFrac * d })
 			return
 		}
 

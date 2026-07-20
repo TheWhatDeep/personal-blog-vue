@@ -1,5 +1,6 @@
 import { angleDiff, dist, TAU } from '../core/MathUtil.js'
 import { TILE, TILE_SIZE } from '../world/TileMap.js'
+import { BALANCE } from '../data/balance.js'
 
 /**
  * Combat system: the single damage pipeline for everything in the game.
@@ -327,6 +328,9 @@ export class Combat {
 			if (player.rollTime > 0.11 && !opts.isHazard) game.triggerPerfectDodge()
 			return
 		}
+
+		// global tuning: hits are meant to hurt (see data/balance.js)
+		amount *= BALANCE.enemyDamageMul
 
 		// shield buffs absorb first
 		let dmg = amount
