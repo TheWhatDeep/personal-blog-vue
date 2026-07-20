@@ -86,6 +86,8 @@ export class Game {
 		this.rng = new Rng()
 		this.godMode = false
 		this.showPerf = false
+		this.hitStop = 0 // brief sim freeze on meaty hits
+		this.witchTimeT = 0 // perfect-dodge time dilation
 
 		// apply persisted settings
 		const s = this.save.settings
@@ -308,6 +310,23 @@ export class Game {
 		const input = this.input
 		const player = this.player
 
+		// hit-stop: freeze the simulation for a few frames on meaty hits
+		if (this.hitStop > 0) {
+			this.hitStop -= dt
+			return
+		}
+		// perfect-dodge time dilation ticks down in real time
+		this.witchTimeT = Math.max(0, (this.witchTimeT ?? 0) - dt)
+
+		// mouse aim: point attacks/skills at the cursor (twin-stick style)
+		if (input.mouseAiming && !player.dead) {
+			const wx = this.camera.renderX + input.mouseX
+			const wy = this.camera.renderY + input.mouseY
+			const len = Math.hypot(wx - player.x, wy - player.y) || 1
+			input.aimX = (wx - player.x) / len
+			input.aimY = (wy - player.y) / len
+		}
+
 		if (!player.dead) {
 			if (input.pressed('debug')) {
 				this.state = 'debug'
@@ -328,7 +347,7 @@ export class Game {
 
 			player.update(this, dt)
 
-			if (input.isDown('attack')) this.combat.playerAttack()
+			if (input.isDown('attack') || input.mouseDown?.[0]) this.combat.playerAttack()
 			if (input.pressed('dodge')) player.tryDodge(this)
 			if (input.pressed('skill1')) this.skillSystem.cast(0)
 			if (input.pressed('skill2')) this.skillSystem.cast(1)
@@ -679,6 +698,23 @@ export class Game {
 			if (this.ui.sel === 0) this.continueToEndless()
 			else this.endRun('menu')
 		}
+	}
+
+	/** Perfect dodge: rolled through an attack in its final moments. */
+	triggerPerfectDodge() {
+		if (this.witchTimeT > 0) return
+		this.witchTimeT = 1.1
+		this.hitStop = Math.max(this.hitStop, 0.05)
+		const player = this.player
+		player.dodgeCd = 0
+		// the world crawls: enemies slowed hard, enemy projectiles crawl
+		for (const e of this.world.enemies) {
+			if (!e.dead && e.team === 'enemy') this.statusFx.apply(e, { id: 'freeze', duration: 1.1, power: 0.65 })
+		}
+		this.world.projSlowT = 1.1
+		this.world.floatText(player.x, player.y - 14, 'PERFECT!', 0xff7ce8ff, 1.2)
+		this.particles.burst({ x: player.x, y: player.y, count: 14, color: [0xffffe9b0, 0xffff8a5a], speed: 70, life: 0.5 })
+		this.audio.play('skill_frost', 0.9)
 	}
 
 	/** Debug/cheat panel actions ([`] or F9 in a run). Labels are dynamic. */
@@ -1094,12 +1130,18 @@ export class Game {
 		if (e.flash > 0) tint = rgba(255, 80, 80, 255)
 		else if (e.team === 'player') tint = rgba(140, 220, 255, 255)
 
-		// state-based animation: hurt > attack strip > walk cycle > idle
+		// attack telegraph: red pulse + "!" during the wind-up
+		if ((e.attackWindup ?? 0) > 0) {
+			if (Math.floor(this.ui.menuT * 14) % 2 === 0) tint = rgba(255, 110, 110, 255)
+			r.text('!', e.x, e.y - e.r * 2 - 12, rgba(255, 90, 90, 255), 1, 'center')
+		}
+
+		// state-based animation: hurt/flinch > attack strip > walk cycle > idle
 		let name = sprite
 		let t = e.animT
 		let fps = 6
 		const attacking = e.kind === 'boss' ? e.attackPoseT > 0 : e.state === 'attack'
-		if (e.flash > 0 && anims[`${sprite}_hurt`]) {
+		if ((e.flash > 0 || e.state === 'flinch') && anims[`${sprite}_hurt`]) {
 			name = `${sprite}_hurt`
 			t = 0.12 - e.flash
 			fps = 16

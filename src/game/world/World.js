@@ -27,6 +27,7 @@ export class World {
 		this.hazards = [] // dynamic zones (poison clouds, lava pools, webs, void)
 		this.telegraphs = [] // boss attack warnings
 		this.effects = [] // short-lived visuals: slash sprites, lightning lines, rings
+		this.projSlowT = 0 // perfect dodge slows enemy projectiles
 		this.puzzles = []
 		this.boss = null
 		this.grid = new SpatialGrid(48)
@@ -253,14 +254,17 @@ export class World {
 		const game = this.game
 		const player = game.player
 		const active = this.projectiles.active
+		this.projSlowT = Math.max(0, this.projSlowT - dt)
 
 		for (let i = 0; i < active.length; i++) {
 			const p = active[i]
 			if (!p.__poolAlive || p.dead) continue
-			p.life -= dt
-			p.x += p.vx * dt
-			p.y += p.vy * dt
-			if (p.spin) p.rot += p.spin * dt
+			// witch time: enemy projectiles crawl, yours don't
+			const pdt = p.team === 'enemy' && this.projSlowT > 0 ? dt * 0.35 : dt
+			p.life -= pdt
+			p.x += p.vx * pdt
+			p.y += p.vy * pdt
+			if (p.spin) p.rot += p.spin * pdt
 
 			let hit = false
 			if (p.life <= 0) hit = true

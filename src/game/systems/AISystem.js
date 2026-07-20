@@ -98,6 +98,7 @@ export class AISystem {
 	_setState(e, state) {
 		e.state = state
 		e.stateTime = 0
+		e.attackWindup = 0
 	}
 
 	_runState(e, target, mods, dt) {
@@ -160,6 +161,11 @@ export class AISystem {
 			case 'recover':
 				// brief vulnerable pause after attacking
 				if (e.stateTime > (def.recoverTime ?? 0.5)) this._setState(e, 'chase')
+				break
+
+			case 'flinch':
+				// poise broken: the hit interrupted whatever was happening
+				if (e.stateTime > 0.28) this._setState(e, 'chase')
 				break
 		}
 	}
@@ -249,6 +255,11 @@ export class AISystem {
 		const def = e.def
 		const game = this.game
 		const a = angleTo(e.x, e.y, target.x, target.y)
+
+		// expose the wind-up so the renderer can telegraph the strike
+		const WINDUPS = { ranged: 0.35, summoner: 0.6, assassin: 0.35, tank: 0.6, flyer: 0.1, bomber: 0 }
+		const windup = WINDUPS[def.ai] ?? 0.25
+		e.attackWindup = Math.max(0, windup - e.stateTime)
 
 		switch (def.ai) {
 			case 'ranged': {

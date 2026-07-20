@@ -143,8 +143,12 @@ export class Input {
 		}
 		this.moveX = mx
 		this.moveY = my
-		// facing follows movement unless the right stick is aiming
-		if (!this.hasAimStick && mlen > 0.01) {
+		// mouse aiming is active while the mouse was used recently (Game
+		// overwrites aimX/aimY from the cursor position each tick)
+		this.mouseAiming = !this.gamepadActive &&
+			performance.now() - (this.lastMouseMoveT ?? -Infinity) < 4000
+		// facing follows movement unless stick or mouse is aiming
+		if (!this.hasAimStick && !this.mouseAiming && mlen > 0.01) {
 			this.aimX = mx / (mlen || 1)
 			this.aimY = my / (mlen || 1)
 		}
@@ -190,10 +194,13 @@ export class Input {
 		this._mousePressed = [false, false, false]
 		this.wheel = 0
 
+		this.lastMouseMoveT = -Infinity
 		this._onMouseMove = (e) => {
 			const rect = canvas.getBoundingClientRect()
 			this.mouseX = (e.clientX - rect.left) / renderer.pixelScale
 			this.mouseY = (e.clientY - rect.top) / renderer.pixelScale
+			this.lastMouseMoveT = performance.now()
+			this.gamepadActive = false
 		}
 		this._onMouseDown = (e) => {
 			this.mouseDown[e.button] = true

@@ -33,6 +33,18 @@ export class Physics {
 			const moved = map.moveCircle(e.x, e.y, e.r, dx, dy)
 			e.x = moved.x
 			e.y = moved.y
+
+			// wall slam: hard knockback into a wall hurts and staggers
+			const kbSpeed = Math.hypot(e.kbx, e.kby)
+			if ((moved.hitX || moved.hitY) && kbSpeed > 130) {
+				e.kbx = 0
+				e.kby = 0
+				e.staggerMeter = (e.staggerMeter ?? 0) + 20
+				game.particles.burst({ x: e.x, y: e.y, count: 10, color: [0xff8a8a9a, 0xff5a5a6a], speed: 60, life: 0.4 })
+				game.camera.shake(0.12)
+				game.audio.play('explosion', 0.35)
+				game.combat.damageEntity(e, Math.round(4 + kbSpeed * 0.04), { noKnockback: true })
+			}
 		}
 
 		this._separate(world)

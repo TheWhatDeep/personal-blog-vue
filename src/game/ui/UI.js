@@ -242,6 +242,10 @@ export class UI {
 		if (this.chronoT > 0) {
 			r.rect(0, 0, vw, vh, rgba(180, 60, 200, 26))
 		}
+		// perfect-dodge witch time: cool blue wash
+		if (game.witchTimeT > 0) {
+			r.rect(0, 0, vw, vh, withAlpha(rgba(120, 200, 255, 30), Math.min(1, game.witchTimeT * 2)))
+		}
 
 		// boss banner
 		if (this.banner) {
@@ -299,6 +303,15 @@ export class UI {
 		for (let i = 1; i < phases; i++) {
 			const frac = boss.bossDef.phases[i - 1].hpAbove
 			r.rect(x + w * frac, y, 1, 8, rgba(255, 255, 255, 120))
+		}
+		// posture bar: fill it to break the boss' stance
+		const bm = this.game.bossManager
+		const poiseMax = boss.bossDef.poise ?? 200
+		if (bm.staggeredT > 0) {
+			const flash = Math.floor(this.menuT * 10) % 2 === 0
+			this.bar(r, x + w * 0.15, y + 10, w * 0.7, 4, 1, flash ? rgba(122, 232, 255, 255) : rgba(255, 255, 255, 255), rgba(20, 30, 40, 255))
+		} else {
+			this.bar(r, x + w * 0.15, y + 10, w * 0.7, 4, bm.stagger / poiseMax, rgba(232, 181, 58, 255), rgba(40, 32, 14, 255))
 		}
 	}
 

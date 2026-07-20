@@ -26,6 +26,8 @@ export class BossManager {
 		this.moveStarted = false
 		this.introT = 0
 		this.dmgScale = 1
+		this.stagger = 0
+		this.staggeredT = 0
 		this.spiral = null
 		this.beams = null
 		this.charging = null
@@ -40,6 +42,29 @@ export class BossManager {
 	/** Boss attack damage through the difficulty equalizer. */
 	_dmg(amount) {
 		return Math.round(amount * (this.dmgScale ?? 1))
+	}
+
+	/** Posture damage: filling the meter breaks the boss' stance. */
+	addStagger(amount) {
+		if (!this.boss || this.staggeredT > 0) return
+		this.stagger += amount
+		const max = this.def.poise ?? 200
+		if (this.stagger >= max) {
+			this.stagger = 0
+			this.staggeredT = 2.2
+			// interrupt everything the boss was doing
+			this.spiral = null
+			this.beams = null
+			this.charging = null
+			this.boss.attackPoseT = 0
+			this.moveStarted = false
+			const g = this.game
+			g.world.floatText(this.boss.x, this.boss.y - this.boss.r - 10, 'STAGGERED!', 0xff3ad2ff, 1.3)
+			g.particles.burst({ x: this.boss.x, y: this.boss.y, count: 22, color: [0xff3ad2ff, 0xffffffff], speed: 110, life: 0.6 })
+			g.camera.shake(0.4)
+			g.hitStop = Math.max(g.hitStop, 0.07)
+			g.audio.play('boss_roar', 0.7)
+		}
 	}
 
 	update(dt) {
@@ -72,6 +97,16 @@ export class BossManager {
 			this.introT -= dt
 			return
 		}
+
+		// posture broken: the boss reels, takes bonus damage, does nothing
+		if (this.staggeredT > 0) {
+			this.staggeredT -= dt
+			boss.vx = 0
+			boss.vy = 0
+			return
+		}
+		// posture slowly recovers while unbroken
+		this.stagger = Math.max(0, this.stagger - dt * (this.def.poise ?? 200) * 0.06)
 
 		// phase transitions (bosses grow more aggressive at HP thresholds)
 		const frac = boss.hp / boss.maxHp
